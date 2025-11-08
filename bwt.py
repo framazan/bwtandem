@@ -3097,25 +3097,14 @@ def _process_chromosome_worker(args):
                 # Use the larger of user-specified or adaptive value
                 effective_max_unit = max(base_max_unit, adaptive_max_unit)
 
-                # TWO-PASS APPROACH: Find perfect repeats first, then imperfect
-                # This avoids longer imperfect motifs masking shorter perfect ones
-
-                # PASS 1: Find all perfect repeats (max_mismatch=0)
-                tier2_perfect_repeats = tier2.find_long_unit_repeats_strict(
+                # Use strict perfect matching (max_mismatch=0) to avoid spurious long motifs
+                # Allowing mismatches during scanning creates false longer motifs that mask
+                # true shorter perfect repeats (e.g., 14bp imperfect masking 7bp perfect)
+                tier2_long_unit_repeats = tier2.find_long_unit_repeats_strict(
                     chrom, min_unit_len=1, max_unit_len=effective_max_unit,
                     max_mismatch=0, min_copies=min_copies
                 )
-                repeats.extend(tier2_perfect_repeats)
-
-                # PASS 2: Find imperfect repeats (max_mismatch=2) if enabled
-                # The deduplication/overlap logic will handle removing duplicates
-                allow_mismatches = config.get('allow_mismatches', True)
-                if allow_mismatches:
-                    tier2_imperfect_repeats = tier2.find_long_unit_repeats_strict(
-                        chrom, min_unit_len=1, max_unit_len=effective_max_unit,
-                        max_mismatch=2, min_copies=min_copies
-                    )
-                    repeats.extend(tier2_imperfect_repeats)
+                repeats.extend(tier2_long_unit_repeats)
 
                 # DONE - Only use strict adjacency detector
                 # No need for other Tier 2 methods as they may create nested calls
@@ -3443,8 +3432,9 @@ class TandemRepeatFinder:
             #     for r in chrom_repeats:
             #         print(f"  [{r.motif}] at {r.start}-{r.end}")
 
-            # Sort by motif length descending (longest units first)
-            sorted_repeats = sorted(chrom_repeats, key=lambda r: len(r.motif), reverse=True)
+            # Sort by: 1) Perfect repeats first (mismatch_rate=0), 2) Then by motif length descending
+            # This ensures perfect short repeats are prioritized over imperfect long ones
+            sorted_repeats = sorted(chrom_repeats, key=lambda r: (r.mismatch_rate > 0, -len(r.motif)))
 
             kept_repeats = []
             occupied_spans = []  # (start, end, motif_len) tuples
