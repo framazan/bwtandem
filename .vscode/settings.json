@@ -1,0 +1,5 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/bin/python",
+  "python.condaPath": "/home/wyim/miniconda3/condabin/conda",
+  "python.terminal.activateEnvironment": true
+}
