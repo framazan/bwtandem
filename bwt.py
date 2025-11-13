@@ -216,10 +216,9 @@ class BWTCore:
         Python list.sort + lambdas). Complexity ~O(n log n) sorts.
         """
         # Prefer fast C implementation when available
-        s = self.text
         try:
             import pydivsufsort  # type: ignore
-            sa_list = pydivsufsort.divsufsort(s)
+            sa_list = pydivsufsort.divsufsort(self.text_arr.tobytes())
             return np.array(sa_list, dtype=np.int32)
         except (ImportError, Exception):
             # Silently fall back to NumPy implementation
