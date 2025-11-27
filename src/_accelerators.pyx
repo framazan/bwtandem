@@ -7,6 +7,127 @@ from libc.math cimport ceil
 
 ctypedef cnp.uint8_t UINT8
 
+from libc.stdint cimport uint64_t
+
+cdef extern from *:
+    int __builtin_popcountll(unsigned long long) nogil
+
+cdef unsigned char[256] _base_map
+cdef bint _base_map_initialized = False
+
+cdef void _init_base_map() noexcept nogil:
+    global _base_map_initialized
+    if _base_map_initialized:
+        return
+    cdef int i
+    for i in range(256):
+        _base_map[i] = 0 # Default to A (00)
+    
+    # C: 01
+    _base_map[67] = 1 
+    _base_map[99] = 1
+    # G: 10
+    _base_map[71] = 2
+    _base_map[103] = 2
+    # T: 11
+    _base_map[84] = 3
+    _base_map[116] = 3
+    # A is 0, so 65/97 are already 0
+    
+    _base_map_initialized = True
+
+cpdef cnp.ndarray[UINT8, ndim=1] pack_sequence(const unsigned char[:] text_arr):
+    if not _base_map_initialized:
+        _init_base_map()
+        
+    cdef int n = text_arr.shape[0]
+    # Pad with 8 bytes (64 bits) to allow safe over-reading
+    cdef int packed_len = (n + 3) // 4 + 8
+    cdef cnp.ndarray[UINT8, ndim=1] packed = np.zeros(packed_len, dtype=np.uint8)
+    cdef unsigned char[:] packed_view = packed
+    cdef int i
+    cdef unsigned char val
+    cdef int byte_idx, bit_shift
+    
+    for i in range(n):
+        val = _base_map[text_arr[i]]
+        byte_idx = i >> 2
+        bit_shift = (i & 3) << 1
+        # Little endian packing in byte: Base 0 at bits 0-1
+        packed_view[byte_idx] |= (val << bit_shift)
+        
+    return packed
+
+cdef inline int _hamming_distance_2bit(const unsigned char[:] packed, int start1, int start2, int length) nogil:
+    cdef int mismatches = 0
+    cdef int i
+    cdef int chunks = length >> 5  # 32 bases per 64-bit chunk
+    cdef int rem = length & 31
+    
+    cdef uint64_t* ptr = <uint64_t*> &packed[0]
+    cdef uint64_t diff, z
+    
+    cdef int bit_off1 = start1 << 1
+    cdef int bit_off2 = start2 << 1
+    
+    cdef int byte_idx1 = bit_off1 >> 3
+    cdef int shift1 = bit_off1 & 7
+    
+    cdef int byte_idx2 = bit_off2 >> 3
+    cdef int shift2 = bit_off2 & 7
+    
+    # Pointers to the start of the words
+    cdef uint64_t* p1 = <uint64_t*> (<unsigned char*>ptr + byte_idx1)
+    cdef uint64_t* p2 = <uint64_t*> (<unsigned char*>ptr + byte_idx2)
+    
+    cdef uint64_t v1, v1_next
+    cdef uint64_t v2, v2_next
+    
+    for i in range(chunks):
+        # Load 64 bits (32 bases) for seq1
+        v1 = p1[0]
+        if shift1:
+            v1_next = (<uint64_t*>((<unsigned char*>p1) + 8))[0]
+            v1 = (v1 >> shift1) | (v1_next << (64 - shift1))
+            
+        # Load 64 bits (32 bases) for seq2
+        v2 = p2[0]
+        if shift2:
+            v2_next = (<uint64_t*>((<unsigned char*>p2) + 8))[0]
+            v2 = (v2 >> shift2) | (v2_next << (64 - shift2))
+            
+        diff = v1 ^ v2
+        # Count mismatches
+        # Combine pairs: (d | d>>1) & 0x55...
+        z = (diff | (diff >> 1)) & <uint64_t>0x5555555555555555
+        mismatches += __builtin_popcountll(z)
+        
+        # Advance pointers by 8 bytes
+        p1 = <uint64_t*> (<unsigned char*>p1 + 8)
+        p2 = <uint64_t*> (<unsigned char*>p2 + 8)
+        
+    # Handle remaining bases
+    if rem > 0:
+        # Load remaining bits
+        v1 = p1[0]
+        if shift1:
+            v1_next = (<uint64_t*>((<unsigned char*>p1) + 8))[0]
+            v1 = (v1 >> shift1) | (v1_next << (64 - shift1))
+            
+        v2 = p2[0]
+        if shift2:
+            v2_next = (<uint64_t*>((<unsigned char*>p2) + 8))[0]
+            v2 = (v2 >> shift2) | (v2_next << (64 - shift2))
+            
+        diff = v1 ^ v2
+        z = (diff | (diff >> 1)) & <uint64_t>0x5555555555555555
+        
+        # Mask out bits beyond rem
+        z &= ((1ULL << (2 * rem)) - 1)
+        mismatches += __builtin_popcountll(z)
+        
+    return mismatches
+
 cdef inline int _max_mismatch_threshold(int period, int copies, double allowed_rate):
     """Reproduce Python mismatch threshold logic in Cython."""
     if period <= 0 or copies <= 0:
@@ -41,21 +162,41 @@ cdef inline int _total_mismatches(const unsigned char[:] text_arr, int start_pos
                 total += 1
     return total
 
-cdef inline int _hamming_distance(const unsigned char[:] a, const unsigned char[:] b, int length) nogil:
-    cdef int i, mismatches = 0
-    for i in range(length):
-        if a[i] != b[i]:
-            mismatches += 1
-    return mismatches
-
 cpdef int hamming_distance(const unsigned char[:] arr1, const unsigned char[:] arr2):
     """Calculate Hamming distance between two arrays."""
     cdef int n1 = arr1.shape[0]
     cdef int n2 = arr2.shape[0]
     if n1 != n2:
         raise ValueError("Arrays must have same length")
-    
     return _hamming_distance(arr1, arr2, n1)
+
+cdef inline int _hamming_distance(const unsigned char[:] arr1, const unsigned char[:] arr2, int length) nogil:
+    cdef int i = 0
+    cdef int mismatches = 0
+    cdef uint64_t* p1
+    cdef uint64_t* p2
+    cdef uint64_t v, z
+    cdef uint64_t LOW_MASK = 0x0101010101010101
+    cdef uint64_t HIGH_MASK = 0x8080808080808080
+    # Process 64-bit chunks
+    cdef int chunks = length >> 3
+    if chunks > 0:
+        p1 = <uint64_t*> &arr1[0]
+        p2 = <uint64_t*> &arr2[0]
+        for i in range(chunks):
+            v = p1[i] ^ p2[i]
+            if v != 0:
+                # SWAR: count zero bytes in v
+                z = ((v - LOW_MASK) & ~v & HIGH_MASK)
+                mismatches += (8 - __builtin_popcountll(z))
+        i = chunks << 3
+    else:
+        i = 0
+    # Handle remaining bytes
+    for i in range(i, length):
+        if arr1[i] != arr2[i]:
+            mismatches += 1
+    return mismatches
 
 cpdef tuple extend_with_mismatches(const unsigned char[:] s_arr,
                                    int start_pos, int period, int n,
@@ -138,7 +279,7 @@ cpdef tuple extend_with_mismatches(const unsigned char[:] s_arr,
 
     return array_start, array_end, copies, full_start, full_end
 
-cpdef list scan_unit_repeats(const unsigned char[:] text_arr, int n, int unit_len, int min_copies, int max_mismatch):
+cpdef list scan_unit_repeats(const unsigned char[:] text_arr, int n, int unit_len, int min_copies, int max_mismatch, const unsigned char[:] packed_arr=None):
     """Scan for repeats of a specific unit length."""
     cdef int i = 0
     cdef list results = []
@@ -147,6 +288,7 @@ cpdef list scan_unit_repeats(const unsigned char[:] text_arr, int n, int unit_le
     cdef int allowed_errors
     cdef int dist
     cdef bint found_indel
+    cdef bint use_packed = (packed_arr is not None)
     
     # Calculate dynamic error threshold (15% of unit length or max_mismatch, whichever is higher)
     allowed_errors = max_mismatch
@@ -169,7 +311,11 @@ cpdef list scan_unit_repeats(const unsigned char[:] text_arr, int n, int unit_le
                 break
                 
             # 1. Check direct Hamming distance
-            dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start:b_end], unit_len)
+            if use_packed:
+                dist = _hamming_distance_2bit(packed_arr, a_start, b_start, unit_len)
+            else:
+                dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start:b_end], unit_len)
+                
             if dist <= allowed_errors:
                 count += 1
                 continue
@@ -179,14 +325,22 @@ cpdef list scan_unit_repeats(const unsigned char[:] text_arr, int n, int unit_le
             
             # Check shift -1
             if b_start > 0:
-                dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start-1:b_end-1], unit_len)
+                if use_packed:
+                    dist = _hamming_distance_2bit(packed_arr, a_start, b_start-1, unit_len)
+                else:
+                    dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start-1:b_end-1], unit_len)
+                    
                 if dist <= allowed_errors:
                     count += 1
                     found_indel = True
             
             if not found_indel and b_end + 1 <= n:
                 # Check shift +1
-                dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start+1:b_end+1], unit_len)
+                if use_packed:
+                    dist = _hamming_distance_2bit(packed_arr, a_start, b_start+1, unit_len)
+                else:
+                    dist = _hamming_distance(text_arr[a_start:a_end], text_arr[b_start+1:b_end+1], unit_len)
+                    
                 if dist <= allowed_errors:
                     count += 1
                     found_indel = True

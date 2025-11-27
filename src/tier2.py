@@ -9,7 +9,7 @@ import time
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore, _kasai_lcp_uint8
-from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats
+from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats, pack_sequence
 
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
@@ -96,12 +96,15 @@ class Tier2LCPFinder:
         if n > 0 and text_arr[n - 1] == 36:  # '$' = 36
             n -= 1
 
+        # Pre-pack sequence for 2-bit acceleration
+        packed_arr = pack_sequence(text_arr)
+
         # For each candidate unit length - PROCESS IN REVERSE ORDER (longest first)
         # This ensures we detect [AT]n before [A]n, [GCG]n before [GC]n, etc.
         max_possible_unit = min(max_unit_len, n // min_copies)
         for unit_len in range(max_possible_unit, min_unit_len - 1, -1):
             # Use accelerated scanner if available
-            candidates = scan_unit_repeats(text_arr, n, unit_len, min_copies, max_mismatch)
+            candidates = scan_unit_repeats(text_arr, n, unit_len, min_copies, max_mismatch, packed_arr)
             
             if candidates is not None:
                 for start_pos, end_pos in candidates:
