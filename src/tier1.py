@@ -3,6 +3,7 @@ from typing import List, Tuple, Set
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
+from . import accelerators
 
 class Tier1STRFinder:
     """Tier 1: Short Perfect Tandem Repeat Finder using optimized sliding window (1-9bp).
@@ -11,14 +12,23 @@ class Tier1STRFinder:
     No BWT/FM-index required - just optimized direct scanning with smart skipping.
     """
 
-    def __init__(self, text_arr: np.ndarray, bwt_core: BWTCore, max_motif_length: int = 9, show_progress: bool = False):
+    def __init__(self, text_arr: np.ndarray, bwt_core: BWTCore, max_motif_length: int = 9,
+                 min_motif_length: int = 1,
+                 allowed_mismatch_rate: float = 0.2, allowed_indel_rate: float = 0.1,
+                 show_progress: bool = False):
         self.text_arr = text_arr
         self.bwt = bwt_core # Added bwt_core reference as it was used in original code
-        self.max_motif_length = max_motif_length
+        self.max_motif_length = max(1, max_motif_length)
+        self.min_motif_length = max(1, min(min_motif_length, self.max_motif_length))
         self.min_copies = 3  # Require at least 3 copies to reduce noise
         self.min_array_length = 6  # Minimum total array length in bp
         self.min_entropy = 1.0  # Minimum Shannon entropy to avoid low-complexity
+        self.allowed_mismatch_rate = max(0.0, allowed_mismatch_rate)
+        self.allowed_indel_rate = max(0.0, allowed_indel_rate)
         self.show_progress = show_progress
+
+    def _build_repeat(self, chromosome: str, refined, tier: int = 1) -> TandemRepeat:
+        return MotifUtils.refined_to_repeat(chromosome, refined, tier, self.text_arr, strand='+')
 
     def _get_max_mismatches_for_array(self, motif_len: int, n_copies: int) -> int:
         """Calculate maximum allowed mismatches for full array.
@@ -32,17 +42,12 @@ class Tier1STRFinder:
         """
         total_length = motif_len * n_copies
 
-        # For single nucleotide repeats (homopolymers), NO mismatches allowed
+        # For single nucleotide repeats (homopolymers), keep strict handling
         if motif_len == 1:
             return 0
 
-        # For short motifs (2-6bp), be very conservative
-        if motif_len <= 6:
-            # Allow at most 5% mismatches (1 in 20 bases)
-            return max(1, int(np.ceil(0.05 * total_length)))
-
-        # For longer motifs, allow up to 8% mismatches
-        return max(1, int(np.ceil(0.08 * total_length)))
+        allowed_rate = max(0.01, min(0.5, self.allowed_mismatch_rate))
+        return max(1, int(np.ceil(allowed_rate * total_length)))
     
     def _find_simple_tandems_kmer(self, chromosome: str) -> List[TandemRepeat]:
         """Find simple perfect tandem repeats using optimized sliding window.
@@ -52,6 +57,7 @@ class Tier1STRFinder:
         """
         repeats = []
         text_arr = self.text_arr
+        sequence_str = text_arr.tobytes().decode('ascii', errors='replace')
         n = text_arr.size
         seen_regions: Set[Tuple[int, int]] = set()
 
@@ -70,7 +76,12 @@ class Tier1STRFinder:
 
         # Process each motif length (1-9bp) in REVERSE order (longest first)
         # This ensures we detect [AT]n before [A]n, [GCG]n before [GC]n, etc.
-        for motif_len in range(min(self.max_motif_length, 9), 0, -1):
+        max_len = min(self.max_motif_length, 9)
+        min_len = max(1, self.min_motif_length)
+        if min_len > max_len:
+            return repeats
+
+        for motif_len in range(max_len, min_len - 1, -1):
             i = 0
             while i < n - motif_len:
                 # Skip if already in a found region (O(1) bitmap check)
@@ -111,40 +122,26 @@ class Tier1STRFinder:
                         continue
 
                     if length >= self.min_array_length:
-                        # Calculate statistics
-                        actual_sequence = text_arr[i:end_pos].tobytes().decode('ascii', errors='replace')
-                        (percent_matches, percent_indels, score, composition,
-                         entropy_val, _) = MotifUtils.calculate_trf_statistics(
-                            text_arr, i, end_pos, motif, copies, 0.0
+                        refined = MotifUtils.refine_repeat(
+                            sequence_str,
+                            i,
+                            end_pos,
+                            motif,
+                            mismatch_fraction=self.allowed_mismatch_rate,
+                            indel_fraction=self.allowed_indel_rate,
+                            min_copies=self.min_copies
                         )
 
-                        repeat = TandemRepeat(
-                            chrom=chromosome,
-                            start=i,
-                            end=end_pos,
-                            motif=motif,
-                            copies=float(copies),
-                            length=length,
-                            tier=1,
-                            confidence=1.0,
-                            consensus_motif=motif,
-                            mismatch_rate=0.0,
-                            max_mismatches_per_copy=0,
-                            n_copies_evaluated=copies,
-                            strand='+',
-                            percent_matches=percent_matches,
-                            percent_indels=percent_indels,
-                            score=score,
-                            composition=composition,
-                            entropy=entropy_val,
-                            actual_sequence=actual_sequence,
-                            variations=None
-                        )
+                        if not refined:
+                            i += position_step
+                            continue
+
+                        repeat = self._build_repeat(chromosome, refined, tier=1)
                         repeats.append(repeat)
-                        seen_regions.add((i, end_pos))
+                        seen_regions.add((refined.start, refined.end))
                         # Update bitmap
-                        seen_mask[i:end_pos] = True
-                        i = end_pos  # Jump past the repeat
+                        seen_mask[refined.start:refined.end] = True
+                        i = refined.end  # Jump past the repeat
                         continue
 
                 i += position_step
@@ -169,6 +166,7 @@ class Tier1STRFinder:
         positions.sort()
         max_mm = 0  # Parameter not used by _extend_tandem_array (kept for backward compatibility)
         text_arr = self.bwt.text_arr
+        sequence_str = text_arr.tobytes().decode('ascii', errors='replace')
 
         for seed_pos in positions:
             # Skip if this position is already part of a found repeat
@@ -221,71 +219,26 @@ class Tier1STRFinder:
 
             array_length = end_pos - start_pos
 
-            if copies >= self.min_copies and (end_pos - start_pos) >= self.min_array_length:
-                # Build consensus motif from all copies
-                consensus_arr, mm_rate, max_mm_per_copy = MotifUtils.build_consensus_motif_array(
-                    text_arr, start_pos, motif_len, copies
+            if copies >= self.min_copies and array_length >= self.min_array_length:
+                motif_template = text_arr[start_pos:start_pos + motif_len].tobytes().decode('ascii', errors='replace')
+                if not motif_template or not all(c in 'ACGT' for c in motif_template):
+                    continue
+                refined = MotifUtils.refine_repeat(
+                    sequence_str,
+                    start_pos,
+                    end_pos,
+                    motif_template,
+                    mismatch_fraction=self.allowed_mismatch_rate,
+                    indel_fraction=self.allowed_indel_rate,
+                    min_copies=self.min_copies
                 )
 
-                if consensus_arr.size == 0:
+                if not refined:
                     continue
 
-                consensus_str = consensus_arr.tobytes().decode('ascii', errors='replace')
-
-                primitive_len = MotifUtils.smallest_period_str(consensus_str)
-                if primitive_len < len(consensus_str):
-                    motif_len = primitive_len
-                    copies = max(1, (end_pos - start_pos) // motif_len)
-                    end_pos = start_pos + copies * motif_len
-                    consensus_arr, mm_rate, max_mm_per_copy = MotifUtils.build_consensus_motif_array(
-                        text_arr, start_pos, motif_len, copies
-                    )
-                    if consensus_arr.size == 0:
-                        continue
-                    consensus_str = consensus_arr.tobytes().decode('ascii', errors='replace')
-
-                # Get canonical motif considering both strands
-                canonical, strand = MotifUtils.get_canonical_motif_stranded(consensus_str)
-
-                # Check maximality
-                if self._is_maximal_repeat_approx(start_pos, end_pos, consensus_arr, motif_len, max_mm):
-                    # Calculate confidence based on mismatch rate
-                    confidence = max(0.5, 1.0 - mm_rate)
-
-                    # Calculate TRF-compatible statistics
-                    (percent_matches, percent_indels, score, composition,
-                     entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
-                        text_arr, start_pos, end_pos, consensus_str, copies, mm_rate
-                    )
-
-                    variations = MotifUtils.summarize_variations_array(
-                        text_arr, start_pos, end_pos, motif_len, consensus_arr
-                    )
-
-                    repeat = TandemRepeat(
-                        chrom=chromosome,
-                        start=start_pos,
-                        end=end_pos,
-                        motif=consensus_str,  # Use observed consensus, not search motif
-                        copies=copies,
-                        length=end_pos - start_pos,
-                        tier=1,
-                        confidence=confidence,
-                        consensus_motif=consensus_str,  # Store observed consensus
-                        mismatch_rate=mm_rate,
-                        max_mismatches_per_copy=max_mm_per_copy,
-                        n_copies_evaluated=copies,
-                        strand=strand,
-                        percent_matches=percent_matches,
-                        percent_indels=percent_indels,
-                        score=score,
-                        composition=composition,
-                        entropy=entropy,
-                        actual_sequence=actual_sequence,
-                        variations=variations if variations else None
-                    )
-                    repeats.append(repeat)
-                    seen_regions.add((start_pos, end_pos))
+                repeat = self._build_repeat(chromosome, refined, tier=1)
+                repeats.append(repeat)
+                seen_regions.add((refined.start, refined.end))
 
         return repeats
 
@@ -301,6 +254,16 @@ class Tier1STRFinder:
         """
         motif_arr = np.frombuffer(motif.encode('ascii'), dtype=np.uint8)
         n = text_arr.size
+        accelerated = accelerators.extend_with_mismatches(
+            text_arr,
+            seed_pos,
+            motif_len,
+            n,
+            self.allowed_mismatch_rate,
+        )
+        if accelerated:
+            _, _, copies_acc, full_start, full_end = accelerated
+            return full_start, full_end, copies_acc
 
         # Start from seed position
         start = seed_pos

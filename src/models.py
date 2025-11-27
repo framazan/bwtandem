@@ -251,3 +251,16 @@ class RepeatAlignmentSummary:
     total_insertions: int
     total_deletions: int
     error_counts: List[int]
+    total_mismatches: int
+
+
+@dataclass
+class RefinedRepeat:
+    """Alignment-refined repeat details prior to TandemRepeat construction."""
+    start: int
+    end: int
+    consensus: str
+    primitive_motif: str
+    motif_len: int
+    copies: float
+    summary: RepeatAlignmentSummary

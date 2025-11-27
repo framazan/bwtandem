@@ -1,9 +1,15 @@
+import math
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from typing import List, Tuple, Set, Optional
 import time
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore, _kasai_lcp_uint8
+from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats
 
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
@@ -15,9 +21,12 @@ class Tier2LCPFinder:
     """
 
     def __init__(self, bwt_core: BWTCore, min_period: int = 1, max_period: int = 1000,
-                 max_short_motif: int = 9, allow_mismatches: bool = True, show_progress: bool = False):
+                 max_short_motif: int = 9, allow_mismatches: bool = True,
+                 allowed_mismatch_rate: float = 0.2, allowed_indel_rate: float = 0.1,
+                 show_progress: bool = False):
         self.bwt = bwt_core
-        self.min_period = min_period  # Now starts at 1bp
+        # Tier 2 is designed for non-microsatellite motifs; enforce >=10bp
+        self.min_period = max(10, min_period)
         self.max_period = max_period
         self.max_short_motif = max_short_motif  # For FM-index search (1-9bp)
         self.min_copies = 3  # Require at least 3 copies
@@ -26,14 +35,43 @@ class Tier2LCPFinder:
         self.allow_mismatches = allow_mismatches
         self.show_progress = show_progress
         self.period_step = 1  # Step size for period scanning (increase to speed up)
+        self.allowed_mismatch_rate = max(0.0, allowed_mismatch_rate)
+        self.allowed_indel_rate = max(0.0, allowed_indel_rate)
+        self.sequence_str = self.bwt.text_arr.tobytes().decode('ascii', errors='replace')
+
+    def _refine_and_create_repeat(self, chromosome: str, start: int, end: int, motif: str,
+                                  tier: int, min_copies: Optional[int] = None,
+                                  strand: str = '+') -> Optional[TandemRepeat]:
+        if min_copies is None:
+            min_copies = self.min_copies
+
+        refined = MotifUtils.refine_repeat(
+            self.sequence_str,
+            start,
+            end,
+            motif,
+            mismatch_fraction=self.allowed_mismatch_rate,
+            indel_fraction=self.allowed_indel_rate,
+            min_copies=min_copies
+        )
+
+        if not refined:
+            return None
+
+        return MotifUtils.refined_to_repeat(chromosome, refined, tier, self.bwt.text_arr, strand=strand)
 
     def _hamming_distance(self, arr1: np.ndarray, arr2: np.ndarray) -> int:
         """Calculate Hamming distance between two arrays."""
+        # Try accelerated version first
+        res = hamming_distance(arr1, arr2)
+        if res is not None:
+            return res
+        print('WARNING: non-accelerated version being used, will be super slow')
         return int(np.sum(arr1 != arr2))
 
     def find_long_unit_repeats_strict(self, chromosome: str, min_unit_len: int = 20,
                                       max_unit_len: int = 120, max_mismatch: int = 2,
-                                      min_copies: int = 3) -> List[TandemRepeat]:
+                                      min_copies: int = 2) -> List[TandemRepeat]:
         """Find long-unit tandem repeats using strict adjacency checking.
 
         This detects biologically meaningful long repeats (20-120bp units) and avoids
@@ -44,7 +82,7 @@ class Tier2LCPFinder:
             min_unit_len: Minimum unit length to consider (default 20bp)
             max_unit_len: Maximum unit length to scan (default 120bp)
             max_mismatch: Maximum Hamming distance per unit comparison (default 2)
-            min_copies: Minimum number of adjacent copies required (default 3)
+            min_copies: Minimum number of adjacent copies required (default 2 for long units)
 
         Returns:
             List of long-unit tandem repeats
@@ -62,6 +100,38 @@ class Tier2LCPFinder:
         # This ensures we detect [AT]n before [A]n, [GCG]n before [GC]n, etc.
         max_possible_unit = min(max_unit_len, n // min_copies)
         for unit_len in range(max_possible_unit, min_unit_len - 1, -1):
+            # Use accelerated scanner if available
+            candidates = scan_unit_repeats(text_arr, n, unit_len, min_copies, max_mismatch)
+            
+            if candidates is not None:
+                for start_pos, end_pos in candidates:
+                    length = end_pos - start_pos
+                    count = length // unit_len
+                    
+                    # Get the first unit as the motif
+                    motif_arr = text_arr[start_pos:start_pos + unit_len]
+                    motif = motif_arr.tobytes().decode('ascii', errors='replace')
+
+                    # Reduce to primitive period (e.g., 105bp -> 36bp if 105 is periodic)
+                    primitive_period = MotifUtils.smallest_period_str(motif)
+                    if primitive_period < len(motif):
+                        # Use the primitive period instead
+                        motif = motif[:primitive_period]
+                        # Recalculate count based on primitive period
+                        count = length // primitive_period
+
+                    repeat = self._refine_and_create_repeat(
+                        chromosome,
+                        start_pos,
+                        end_pos,
+                        motif,
+                        tier=2,
+                        min_copies=max(2, min_copies)
+                    )
+                    if repeat:
+                        repeats.append(repeat)
+                continue
+
             i = 0
             while i + unit_len * min_copies <= n:
                 # Test if there's at least one adjacency starting at i
@@ -81,9 +151,47 @@ class Tier2LCPFinder:
                     a = text_arr[a_start:a_end]
                     b = text_arr[b_start:b_end]
 
-                    if self._hamming_distance(a, b) <= max_mismatch:
+                    # Calculate dynamic error threshold (15% of unit length or max_mismatch, whichever is higher)
+                    # This allows for more variation in longer repeats
+                    allowed_errors = max(max_mismatch, int(unit_len * 0.15))
+
+                    # 1. Check direct Hamming distance
+                    # Optimization: Use accelerator directly to avoid method call overhead
+                    dist = hamming_distance(a, b)
+                    if dist is None:
+                        dist = int(np.sum(a != b))
+
+                    if dist <= allowed_errors:
                         count += 1
-                    else:
+                        continue
+
+                    # 2. Check for 1bp Indels (shift left/right)
+                    # This helps detect repeats even if they drift slightly off-grid
+                    found_indel = False
+                    
+                    # Check shift -1 (deletion relative to grid)
+                    if b_start > 0:
+                        b_shifted = text_arr[b_start-1:b_end-1]
+                        dist = hamming_distance(a, b_shifted)
+                        if dist is None:
+                            dist = int(np.sum(a != b_shifted))
+                            
+                        if dist <= allowed_errors:
+                            count += 1
+                            found_indel = True
+                    
+                    if not found_indel and b_end + 1 <= n:
+                        # Check shift +1 (insertion relative to grid)
+                        b_shifted = text_arr[b_start+1:b_end+1]
+                        dist = hamming_distance(a, b_shifted)
+                        if dist is None:
+                            dist = int(np.sum(a != b_shifted))
+                            
+                        if dist <= allowed_errors:
+                            count += 1
+                            found_indel = True
+                            
+                    if not found_indel:
                         break
 
                 # If we found enough copies, create a repeat
@@ -103,37 +211,17 @@ class Tier2LCPFinder:
                         # Recalculate count based on primitive period
                         count = length // primitive_period
 
-                    # Calculate consensus and statistics
-                    (percent_matches, percent_indels, score, composition,
-                     entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
-                        text_arr, i, end_pos, motif, count, 0.0
+                    repeat = self._refine_and_create_repeat(
+                        chromosome,
+                        i,
+                        end_pos,
+                        motif,
+                        tier=2,
+                        min_copies=max(2, min_copies)
                     )
-
-                    # Calculate actual mismatches (perfect repeats have 100% matches)
-                    actual_mismatches_per_copy = 0 if percent_matches >= 99.9 else max_mismatch
-
-                    repeat = TandemRepeat(
-                        chrom=chromosome,
-                        start=i,
-                        end=end_pos,
-                        motif=motif,
-                        copies=float(count),
-                        length=length,
-                        tier=2,  # Tier 2 for long units
-                        confidence=0.95,
-                        consensus_motif=motif,
-                        mismatch_rate=0.0,
-                        max_mismatches_per_copy=actual_mismatches_per_copy,
-                        n_copies_evaluated=count,
-                        strand='+',
-                        percent_matches=percent_matches,
-                        percent_indels=percent_indels,
-                        score=score,
-                        composition=composition,
-                        entropy=entropy,
-                        actual_sequence=actual_sequence,
-                        variations=None
-                    )
+                    if not repeat:
+                        i += 1
+                        continue
                     # if 'test8' in chromosome or 'test10' in chromosome:
                     #     print(f"[DEBUG] Found repeat: chrom={chromosome}, start={i}, end={end_pos}, motif={motif[:20]}{'...' if len(motif)>20 else ''}, unit_len={unit_len}, copies={count}")
                     repeats.append(repeat)
@@ -155,65 +243,25 @@ class Tier2LCPFinder:
         """
         total_length = motif_len * n_copies
 
-        # For single nucleotide repeats (homopolymers), NO mismatches allowed
         if motif_len == 1:
             return 0
 
-        # For short motifs (2-6bp), be very conservative
-        if motif_len <= 6:
-            # Allow at most 5% mismatches (1 in 20 bases)
-            return max(1, int(np.ceil(0.05 * total_length)))
-
-        # For longer motifs, allow up to 8% mismatches
-        return max(1, int(np.ceil(0.08 * total_length)))
+        allowed_rate = max(0.01, min(0.5, self.allowed_mismatch_rate))
+        return max(1, int(np.ceil(allowed_rate * total_length)))
     
     def find_short_imperfect_repeats(self, chromosome: str, tier1_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
-        """Find short imperfect tandem repeats (1-9bp) using FM-index with mismatch tolerance.
+        """(Deprecated) Short imperfect 1-9bp search.
 
-        This is called after Tier1 to find imperfect repeats that the perfect-match sliding window missed.
-
-        Args:
-            chromosome: Chromosome name
-            tier1_seen: Set of (start, end) regions already found by Tier1
-
-        Returns:
-            List of imperfect tandem repeats
+        Kept for API compatibility but returns an empty list so that
+        Tier 2 focuses exclusively on motifs > 9bp. Use Tier1 for
+        microsatellites.
         """
-        repeats = []
-        seen_regions = tier1_seen.copy()  # Don't overlap with Tier1 results
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2: skipping short imperfect (1-9bp) search; handled by Tier 1")
+        return []
 
-        # Use the BWT-based methods from old Tier1
-        text_arr = self.bwt.text_arr
-        n = text_arr.size
-
-        # IMPORTANT: Skip BWT search for large chromosomes to prevent stalling
-        # Tier 1 already found perfect repeats, and BWT search is too expensive for large sequences
-        if n > 1_000_000:  # > 1 Mbp
-            if self.show_progress:
-                print(f"  [{chromosome}] Skipping BWT search for short imperfect repeats (sequence too large)")
-            return []
-
-        for k in range(self.min_period, min(self.max_short_motif + 1, 10)):
-            # Generate all canonical motifs of length k
-            for motif in MotifUtils.enumerate_motifs(k):
-                # Find positions using FM-index
-                positions = self.bwt.locate_positions(motif)
-                
-                if len(positions) < self.min_copies:
-                    continue
-                
-                # Find tandem repeats from these positions allowing mismatches
-                found = self._find_tandems_fm_with_mismatches(
-                    positions, motif, chromosome, k, seen_regions
-                )
-                
-                for repeat in found:
-                    repeats.append(repeat)
-                    seen_regions.add((repeat.start, repeat.end))
-
-        return repeats
-
-    def find_long_repeats(self, chromosome: str, tier1_seen: Optional[Set[Tuple[int, int]]] = None) -> List[TandemRepeat]:
+    def find_long_repeats(self, chromosome: str, tier1_seen: Optional[Set[Tuple[int, int]]] = None,
+                         max_scan_period: Optional[int] = None) -> List[TandemRepeat]:
         """Find medium to long tandem repeats using a lightweight period scan.
 
         This avoids building large LCP structures and is fast for moderate sequences.
@@ -221,8 +269,9 @@ class Tier2LCPFinder:
         Args:
             chromosome: Chromosome name
             tier1_seen: Set of (start, end) regions already found by Tier1 (to skip)
+            max_scan_period: Optional maximum period to scan (overrides default logic)
         """
-        return self._find_repeats_simple(chromosome, tier1_seen or set())
+        return self._find_repeats_simple(chromosome, tier1_seen or set(), max_scan_period)
     
     def _compute_lcp_array(self) -> np.ndarray:
         """Compute LCP array using Kasai over uint8 codes (Numba-accelerated when available)."""
@@ -306,7 +355,8 @@ class Tier2LCPFinder:
         p = n - int(pi[-1])
         return p if p != 0 and n % p == 0 else n
 
-    def _find_repeats_simple(self, chromosome: str, tier1_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
+    def _find_repeats_simple(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
+                            max_scan_period: Optional[int] = None) -> List[TandemRepeat]:
         """Simple scanning detector for tandem repeats with imperfect repeat support.
 
         Optimized for long sequences with adaptive scanning.
@@ -314,22 +364,29 @@ class Tier2LCPFinder:
         Args:
             chromosome: Chromosome name
             tier1_seen: Set of (start, end) regions already found by Tier1 (to skip)
+            max_scan_period: Optional maximum period to scan
         """
         s_arr = self.bwt.text_arr
         n = int(s_arr.size)
         # Exclude trailing sentinel if present ('$' == 36)
         if n > 0 and s_arr[n - 1] == 36:
             n -= 1
-        # AGGRESSIVE max_period limits to prevent stalling
-        max_p = min(self.max_period, max(1, n // 2))
-        if n > 100_000:  # > 100kb
-            max_p = min(max_p, 500)
-        elif n > 10_000:  # > 10kb
-            max_p = min(max_p, 1000)
-        elif n > 1_000:  # > 1kb
-            max_p = min(max_p, n // 2)
+        
+        # Determine max period
+        if max_scan_period is not None:
+            max_p = max_scan_period
         else:
-            max_p = min(max_p, n // 2)
+            # AGGRESSIVE max_period limits to prevent stalling
+            max_p = min(self.max_period, max(1, n // 2))
+            if n > 100_000:  # > 100kb
+                max_p = min(max_p, 500)
+            elif n > 10_000:  # > 10kb
+                max_p = min(max_p, 1000)
+            elif n > 1_000:  # > 1kb
+                max_p = min(max_p, n // 2)
+            else:
+                max_p = min(max_p, n // 2)
+                
         min_p = min(self.min_period, max_p)
         results: List[TandemRepeat] = []
         seen: Set[Tuple[int, int, str]] = set()
@@ -348,35 +405,99 @@ class Tier2LCPFinder:
         elif n > 5_000_000:  # > 5 Mbp
             position_step = 50
             period_step = 2
-        elif n > 1_000_000:  # > 1 Mbp
+        elif n > 2_000_000:  # > 2 Mbp (Increased from 1MB)
             position_step = 20
             period_step = 1
-        elif n > 100_000:  # > 100 kb
+        elif n > 500_000:  # > 500 kb (Increased from 100kb)
             position_step = 5
             period_step = 1
-        elif n > 10_000:  # > 10 kb
+        elif n > 100_000:  # > 100 kb
             position_step = 2
             period_step = 1
         else:
             position_step = 1
             period_step = 1
 
-        if self.show_progress and (position_step > 1 or period_step > 1):
-            print(f"  [{chromosome}] Adaptive scanning: pos_step={position_step}, period_step={period_step}")
+        if self.show_progress:
+            print(
+                f"  [{chromosome}] Tier 2 starting scan: n={n}, min_p={min_p}, max_p={max_p}, pos_step={position_step}, period_step={period_step}",
+                flush=True,
+            )
 
         # Safety counter to prevent infinite loops and timeout
-        max_iterations = 100_000  # Reduced from 1M - be very aggressive
+        max_iterations = 500_000  # Increased from 100k
         iteration_count = 0
         start_time = time.time()
-        max_time_seconds = 30  # Maximum 30 seconds per chromosome for Tier 2
+        max_time_seconds = 300  # Increased to 5 minutes per chromosome for Tier 2
+
+        # Use accelerated scanner if available
+        # Note: scan_simple_repeats handles the loops internally
+        # We pass tier1_mask as uint8 (bool is uint8 in numpy)
+        tier1_mask_uint8 = tier1_mask.view(np.uint8)
+        
+        candidates = scan_simple_repeats(
+            s_arr, tier1_mask_uint8, n, min_p, max_p, period_step, position_step, self.allowed_mismatch_rate
+        )
+        
+        if candidates is not None:
+            # Process candidates from accelerator
+            for full_start, full_end, p in candidates:
+                # Check if we've seen this region
+                region_key = (full_start, full_end, "") # Motif added later
+                is_new = True
+                for s_start, s_end, _ in seen:
+                    if s_start <= full_start and s_end >= full_end:
+                        is_new = False
+                        break
+                
+                if is_new:
+                    motif_arr = s_arr[full_start:full_start + p]
+                    motif = motif_arr.tobytes().decode('ascii', errors='replace')
+
+                    repeat = self._refine_and_create_repeat(
+                        chromosome,
+                        full_start,
+                        full_end,
+                        motif,
+                        tier=2
+                    )
+
+                    if repeat:
+                        results.append(repeat)
+                        seen.add((full_start, full_end, repeat.motif))
+            
+            if self.show_progress:
+                print(f"  [{chromosome}] Tier 2 processed {len(results)} repeats (>=10bp motifs) in {time.time() - start_time:.2f}s", flush=True)
+            return results
+
+        total_periods = max(1, ((max_p - min_p) // period_step) + 1)
+        processed_periods = 0
+        last_period_value = None
+        next_progress_time = start_time + 2.0 if self.show_progress else None
 
         for p in range(min_p, max_p + 1, period_step):
+            processed_periods += 1
+            last_period_value = p
+
+            if self.show_progress and next_progress_time is not None and time.time() >= next_progress_time:
+                pct = min(99.0, (processed_periods / total_periods) * 100.0)
+                print(
+                    f"  [{chromosome}] Tier 2 scan {pct:.1f}% (period {p}/{max_p}, ~{iteration_count} windows tested)",
+                    flush=True,
+                )
+                next_progress_time = time.time() + 2.0
+
             # Check timeout
             if iteration_count % 1000 == 0:
                 if time.time() - start_time > max_time_seconds:
                     if self.show_progress:
-                        print(f"  [{chromosome}] Tier 2 timeout ({max_time_seconds}s) - stopping scan")
+                        print(f"  [{chromosome}] Tier 2 timeout ({max_time_seconds}s) - stopping scan", flush=True)
                     break
+
+            # Inner-loop progress: print once per minute within a single period
+            inner_next_progress_time = time.time() + 60.0 if self.show_progress else None
+            if self.show_progress:
+                print(f"  [{chromosome}] Tier 2 scanning period {p}...", flush=True)
 
             i = 0
             while i < n - p:
@@ -390,81 +511,77 @@ class Tier2LCPFinder:
                 if iteration_count > max_iterations:
                     break
 
+                # Inner-loop time-based progress (once per minute)
+                if self.show_progress and inner_next_progress_time is not None and time.time() >= inner_next_progress_time:
+                    pos_pct = min(100.0, (i / max(1, n - p)) * 100.0)
+                    print(
+                        f"  [{chromosome}] Tier 2 period {p}/{max_p}: {pos_pct:.1f}% of positions scanned (~{iteration_count} windows)",
+                        flush=True,
+                    )
+                    inner_next_progress_time = time.time() + 60.0
+
                 # Quick check for periodicity
                 # Compare s[i] with s[i+p]
-                if s_arr[i] == s_arr[i + p]:
-                    # Found a match, try to extend
-                    # Use mismatch tolerance
-                    start_pos, end_pos, copies, full_start, full_end = self._extend_with_mismatches(
-                        s_arr, i, p, n, self.allow_mismatches
-                    )
+                # OPTIMIZATION: Check a small window (e.g. 4bp) instead of single base
+                # This reduces false positives by ~256x
+                check_len = min(4, p)
+                if i + p + check_len <= n:
+                    if np.array_equal(s_arr[i:i + check_len], s_arr[i + p:i + p + check_len]):
+                        # Found a match, try to extend
+                        # Use mismatch tolerance
+                        start_pos, end_pos, copies, full_start, full_end = self._extend_with_mismatches(
+                            s_arr, i, p, n, self.allow_mismatches
+                        )
 
-                    if copies >= self.min_copies:
-                        # Check if we've seen this region
-                        region_key = (full_start, full_end, "") # Motif added later
-                        is_new = True
-                        for s_start, s_end, _ in seen:
-                            if s_start <= full_start and s_end >= full_end:
-                                is_new = False
-                                break
-                        
-                        if is_new:
-                            # Extract motif and calculate stats
-                            motif_arr = s_arr[start_pos:start_pos + p]
-                            motif = motif_arr.tobytes().decode('ascii', errors='replace')
+                        # Dynamic copy threshold: allow 2 copies for longer periods (>20bp)
+                        required_copies = self.min_copies
+                        if p >= 20:
+                            required_copies = 2
+
+                        if copies >= required_copies:
+                            # Check if we've seen this region
+                            region_key = (full_start, full_end, "") # Motif added later
+                            is_new = True
+                            for s_start, s_end, _ in seen:
+                                if s_start <= full_start and s_end >= full_end:
+                                    is_new = False
+                                    break
                             
-                            # Build consensus
-                            consensus_arr, mm_rate, max_mm = MotifUtils.build_consensus_motif_array(
-                                s_arr, full_start, p, copies
-                            )
-                            consensus = consensus_arr.tobytes().decode('ascii', errors='replace')
-                            
-                            # Calculate stats
-                            (percent_matches, percent_indels, score, composition,
-                             entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
-                                s_arr, full_start, full_end, consensus, copies, mm_rate
-                            )
-                            
-                            variations = MotifUtils.summarize_variations_array(
-                                s_arr, full_start, full_end, p, consensus_arr
-                            )
-                            
-                            if entropy >= self.min_entropy:
-                                repeat = TandemRepeat(
-                                    chrom=chromosome,
-                                    start=full_start,
-                                    end=full_end,
-                                    motif=consensus,
-                                    copies=float(copies),
-                                    length=full_end - full_start,
-                                    tier=2,
-                                    confidence=max(0.5, 1.0 - mm_rate),
-                                    consensus_motif=consensus,
-                                    mismatch_rate=mm_rate,
-                                    max_mismatches_per_copy=max_mm,
-                                    n_copies_evaluated=copies,
-                                    strand='+',
-                                    percent_matches=percent_matches,
-                                    percent_indels=percent_indels,
-                                    score=score,
-                                    composition=composition,
-                                    entropy=entropy,
-                                    actual_sequence=actual_sequence,
-                                    variations=variations if variations else None
+                            if is_new:
+                                motif_arr = s_arr[start_pos:start_pos + p]
+                                motif = motif_arr.tobytes().decode('ascii', errors='replace')
+
+                                repeat = self._refine_and_create_repeat(
+                                    chromosome,
+                                    full_start,
+                                    full_end,
+                                    motif,
+                                    tier=2
                                 )
-                                results.append(repeat)
-                                seen.add((full_start, full_end, consensus))
-                                
-                                # Skip past this repeat
-                                i = full_end
-                                continue
+
+                                if repeat:
+                                    results.append(repeat)
+                                    seen.add((full_start, full_end, repeat.motif))
+
+                                    # Skip past this repeat
+                                    i = full_end
+                                    continue
                 
                 i += position_step
             
             if iteration_count > max_iterations:
                 if self.show_progress:
-                    print(f"  [{chromosome}] Tier 2 iteration limit reached - stopping scan")
+                    print(f"  [{chromosome}] Tier 2 iteration limit reached - stopping scan", flush=True)
                 break
+
+        if self.show_progress and processed_periods:
+            pct = min(100.0, (processed_periods / total_periods) * 100.0)
+            period_display = last_period_value if last_period_value is not None else max_p
+            suffix = " (early stop)" if processed_periods < total_periods else ""
+            print(
+                f"  [{chromosome}] Tier 2 scan {pct:.1f}% complete (period {period_display}/{max_p}, ~{iteration_count} windows){suffix}",
+                flush=True,
+            )
 
         return results
 
@@ -476,6 +593,16 @@ class Tier2LCPFinder:
         Returns:
             (array_start, array_end, copies, full_start, full_end)
         """
+        accelerated = extend_with_mismatches(
+            s_arr,
+            start_pos,
+            period,
+            n,
+            self.allowed_mismatch_rate,
+        )
+        if accelerated:
+            return accelerated
+
         motif = s_arr[start_pos:start_pos + period].copy()
         start = start_pos
         end = start_pos + period
@@ -590,18 +717,18 @@ class Tier2LCPFinder:
                 # Verify the repeat content
                 motif_arr = self.bwt.text_arr[start_pos:start_pos + period]
                 motif = motif_arr.tobytes().decode('ascii', errors='replace')
-                
-                repeat = TandemRepeat(
-                    chrom=chromosome,
-                    start=start_pos,
-                    end=end_pos,
-                    motif=motif,
-                    copies=float(copies),
-                    length=copies * period,
+
+                repeat = self._refine_and_create_repeat(
+                    chromosome,
+                    start_pos,
+                    end_pos,
+                    motif,
                     tier=2,
-                    confidence=1.0
+                    min_copies=copies
                 )
-                repeats.append(repeat)
+
+                if repeat:
+                    repeats.append(repeat)
         
         return repeats
     
@@ -616,9 +743,34 @@ class Tier2LCPFinder:
         similarity = matches / m if m > 0 else 0.0
         return bool(similarity >= 0.8)
 
+    def _region_contains_point(self, regions: Set[Tuple[int, int]], point: int,
+                               lock: Optional[threading.Lock] = None) -> bool:
+        if lock:
+            lock.acquire()
+        try:
+            for start, end in regions:
+                if start <= point < end:
+                    return True
+        finally:
+            if lock:
+                lock.release()
+        return False
+
+    def _region_add(self, regions: Set[Tuple[int, int]], region: Tuple[int, int],
+                    lock: Optional[threading.Lock] = None) -> None:
+        if lock:
+            lock.acquire()
+            try:
+                regions.add(region)
+            finally:
+                lock.release()
+        else:
+            regions.add(region)
+
     def _find_tandems_fm_with_mismatches(self, positions: List[int], motif: str,
                                          chromosome: str, motif_len: int,
-                                         seen_regions: Set[Tuple[int, int]]) -> List[TandemRepeat]:
+                                         seen_regions: Set[Tuple[int, int]],
+                                         lock: Optional[threading.Lock] = None) -> List[TandemRepeat]:
         """Find tandem repeats allowing mismatches using seed-and-extend strategy (for FM-index results)."""
         repeats = []
         if not positions:
@@ -629,7 +781,7 @@ class Tier2LCPFinder:
         text_arr = self.bwt.text_arr
 
         for seed_pos in positions_sorted:
-            if any(start <= seed_pos < end for start, end in seen_regions):
+            if self._region_contains_point(seen_regions, seed_pos, lock):
                 continue
 
             start_pos, end_pos, copies = self._extend_tandem_fm(
@@ -637,48 +789,22 @@ class Tier2LCPFinder:
             )
 
             if copies >= self.min_copies:
-                # Build consensus
-                consensus_arr, mm_rate, max_mm_per_copy = MotifUtils.build_consensus_motif_array(
+                consensus_arr, _, _ = MotifUtils.build_consensus_motif_array(
                     text_arr, start_pos, motif_len, copies
                 )
-                consensus_str = consensus_arr.tobytes().decode('ascii', errors='replace')
-                
-                # Check maximality
+
                 if self._is_maximal_fm(start_pos, end_pos, consensus_arr, motif_len, max_mm):
-                    # Calculate stats
-                    (percent_matches, percent_indels, score, composition,
-                     entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
-                        text_arr, start_pos, end_pos, consensus_str, copies, mm_rate
+                    refined_repeat = self._refine_and_create_repeat(
+                        chromosome,
+                        start_pos,
+                        end_pos,
+                        motif,
+                        tier=2
                     )
-                    
-                    variations = MotifUtils.summarize_variations_array(
-                        text_arr, start_pos, end_pos, motif_len, consensus_arr
-                    )
-                    
-                    repeat = TandemRepeat(
-                        chrom=chromosome,
-                        start=start_pos,
-                        end=end_pos,
-                        motif=consensus_str,
-                        copies=float(copies),
-                        length=end_pos - start_pos,
-                        tier=2,
-                        confidence=max(0.5, 1.0 - mm_rate),
-                        consensus_motif=consensus_str,
-                        mismatch_rate=mm_rate,
-                        max_mismatches_per_copy=max_mm_per_copy,
-                        n_copies_evaluated=copies,
-                        strand='+',
-                        percent_matches=percent_matches,
-                        percent_indels=percent_indels,
-                        score=score,
-                        composition=composition,
-                        entropy=entropy,
-                        actual_sequence=actual_sequence,
-                        variations=variations if variations else None
-                    )
-                    repeats.append(repeat)
-                    seen_regions.add((start_pos, end_pos))
+
+                    if refined_repeat:
+                        repeats.append(refined_repeat)
+                        self._region_add(seen_regions, (refined_repeat.start, refined_repeat.end), lock)
 
         return repeats
 

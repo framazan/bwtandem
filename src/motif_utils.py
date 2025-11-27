@@ -2,7 +2,7 @@ import numpy as np
 from typing import List, Tuple, Dict, Iterator, Optional
 from collections import Counter
 import math
-from .models import AlignmentResult, RepeatAlignmentSummary
+from .models import AlignmentResult, RepeatAlignmentSummary, RefinedRepeat, TandemRepeat
 
 class MotifUtils:
     """Utilities for canonical motif handling."""
@@ -359,6 +359,7 @@ class MotifUtils:
 
         total_insertions = 0
         total_deletions = 0
+        total_mismatches = 0
 
         current_motif = motif_template
         pos = start
@@ -372,12 +373,13 @@ class MotifUtils:
 
             result = MotifUtils._align_unit_to_window(current_motif, window, max_indel, tolerance)
             if result is None or result.consumed == 0:
-                print(f"DEBUG: Alignment failed at pos {pos}. Window: {window}, Motif: {current_motif}")
+                # Alignment failed - stop extending
                 break
 
             copy_sequences.append(result.unit_sequence)
             operations_by_copy.append(result.operations)
             error_counts.append(result.error_count)
+            total_mismatches += result.mismatch_count
             total_insertions += result.insertion_length
             total_deletions += result.deletion_length
 
@@ -397,9 +399,8 @@ class MotifUtils:
             return None
 
         consensus = MotifUtils._consensus_from_counts(position_counts, current_motif)
-        total_errors = sum(error_counts)
         denom = copies * motif_len
-        mismatch_rate = total_errors / denom if denom > 0 else 0.0
+        mismatch_rate = total_mismatches / denom if denom > 0 else 0.0
         max_errors_per_copy = max(error_counts) if error_counts else 0
 
         variations: List[str] = []
@@ -431,7 +432,56 @@ class MotifUtils:
             copy_sequences=copy_sequences,
             total_insertions=total_insertions,
             total_deletions=total_deletions,
-            error_counts=error_counts
+            error_counts=error_counts,
+            total_mismatches=total_mismatches
+        )
+
+    @staticmethod
+    def refine_repeat(sequence: str, start: int, end: int, motif_template: str,
+                      mismatch_fraction: float, indel_fraction: float,
+                      min_copies: int) -> Optional[RefinedRepeat]:
+        """Run DP alignment and reduce motif to primitive representation."""
+        if not motif_template:
+            return None
+
+        motif_len = len(motif_template)
+        if motif_len == 0:
+            return None
+
+        if indel_fraction <= 0:
+            max_indel = 0
+        else:
+            max_indel = max(1, int(math.ceil(motif_len * indel_fraction)))
+
+        summary = MotifUtils.align_repeat_region(
+            sequence,
+            start,
+            end,
+            motif_template,
+            mismatch_fraction=mismatch_fraction,
+            max_indel=max_indel,
+            min_copies=min_copies
+        )
+        if not summary:
+            return None
+
+        primitive_len = MotifUtils.smallest_period_str(summary.consensus)
+        if primitive_len == 0:
+            return None
+
+        primitive = summary.consensus[:primitive_len]
+        consumed_len = summary.consumed_length
+        refined_end = start + consumed_len
+        copies = consumed_len / primitive_len if primitive_len > 0 else float(summary.copies)
+
+        return RefinedRepeat(
+            start=start,
+            end=refined_end,
+            consensus=summary.consensus,
+            primitive_motif=primitive,
+            motif_len=primitive_len,
+            copies=copies,
+            summary=summary
         )
 
     @staticmethod
@@ -643,7 +693,8 @@ class MotifUtils:
         return composition
 
     @staticmethod
-    def calculate_trf_score(consensus: str, copies: int, mismatch_rate: float, length: int) -> int:
+    def calculate_trf_score(consensus: str, copies: int, mismatch_rate: float, length: int,
+                             indel_rate: float = 0.0) -> int:
         """Calculate TRF-style alignment score.
 
         TRF uses match/mismatch/indel scoring. We approximate:
@@ -655,20 +706,21 @@ class MotifUtils:
             Alignment score (integer)
         """
         total_bases = length
-        matches = total_bases * (1.0 - mismatch_rate)
+        matches = total_bases * max(0.0, 1.0 - mismatch_rate - indel_rate)
         mismatches = total_bases * mismatch_rate
+        indels = total_bases * indel_rate
 
         # TRF scoring parameters (approximately)
         match_score = 2
         mismatch_penalty = 7
 
-        score = int((matches * match_score) - (mismatches * mismatch_penalty))
+        score = int((matches * match_score) - ((mismatches + indels) * mismatch_penalty))
         return max(0, score)  # Don't allow negative scores
 
     @staticmethod
     def calculate_trf_statistics(text_arr: np.ndarray, start: int, end: int,
                                  consensus_motif: str, copies: int,
-                                 mismatch_rate: float) -> Tuple[float, float, int, Dict[str, float], float, str]:
+                                 mismatch_rate: float, indel_rate: float = 0.0) -> Tuple[float, float, int, Dict[str, float], float, str]:
         """Calculate TRF-compatible statistics for a repeat.
 
         Returns:
@@ -681,10 +733,9 @@ class MotifUtils:
             actual_sequence = consensus_motif * int(copies)
 
         # Percent matches (inverse of mismatch rate)
-        percent_matches = (1.0 - mismatch_rate) * 100.0
+        percent_matches = max(0.0, (1.0 - mismatch_rate - indel_rate) * 100.0)
 
-        # Percent indels (we use Hamming distance, so 0 indels)
-        percent_indels = 0.0
+        percent_indels = max(0.0, indel_rate * 100.0)
 
         # Composition
         composition = MotifUtils.calculate_composition(consensus_motif)
@@ -694,9 +745,60 @@ class MotifUtils:
 
         # Score
         length = end - start
-        score = MotifUtils.calculate_trf_score(consensus_motif, copies, mismatch_rate, length)
+        score = MotifUtils.calculate_trf_score(consensus_motif, copies, mismatch_rate, length, indel_rate)
 
         return percent_matches, percent_indels, score, composition, entropy, actual_sequence
+
+    @staticmethod
+    def compute_trf_stats_from_summary(text_arr: np.ndarray, refined: RefinedRepeat) -> Tuple[float, float, int, Dict[str, float], float, str]:
+        """Reuse the full sequence to compute TRF stats based on alignment summary."""
+        summary = refined.summary
+        total_len = refined.end - refined.start
+        if total_len <= 0:
+            total_len = summary.consumed_length
+
+        mismatch_rate = summary.total_mismatches / (summary.copies * summary.motif_len) if summary.copies > 0 else 0.0
+        indel_rate = (summary.total_insertions + summary.total_deletions) / max(1, summary.copies * summary.motif_len)
+
+        return MotifUtils.calculate_trf_statistics(
+            text_arr,
+            refined.start,
+            refined.end,
+            refined.primitive_motif,
+            int(round(refined.copies)),
+            mismatch_rate,
+            indel_rate
+        )
+
+    @staticmethod
+    def refined_to_repeat(chromosome: str, refined: RefinedRepeat, tier: int,
+                          text_arr: np.ndarray, strand: str = '+') -> TandemRepeat:
+        percent_matches, percent_indels, score, composition, entropy_val, actual_sequence = (
+            MotifUtils.compute_trf_stats_from_summary(text_arr, refined)
+        )
+
+        return TandemRepeat(
+            chrom=chromosome,
+            start=refined.start,
+            end=refined.end,
+            motif=refined.primitive_motif,
+            copies=float(refined.copies),
+            length=refined.end - refined.start,
+            tier=tier,
+            confidence=max(0.5, 1.0 - refined.summary.mismatch_rate),
+            consensus_motif=refined.summary.consensus,
+            mismatch_rate=refined.summary.mismatch_rate,
+            max_mismatches_per_copy=refined.summary.max_errors_per_copy,
+            n_copies_evaluated=int(refined.summary.copies),
+            strand=strand,
+            percent_matches=percent_matches,
+            percent_indels=percent_indels,
+            score=score,
+            composition=composition,
+            entropy=entropy_val,
+            actual_sequence=actual_sequence,
+            variations=refined.summary.variations if refined.summary.variations else None
+        )
 
     @staticmethod
     def enumerate_motifs(k: int, alphabet: str = "ACGT") -> Iterator[str]:
