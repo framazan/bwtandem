@@ -30,9 +30,16 @@ def main():
     parser.add_argument("fasta_file", help="Input FASTA file")
     parser.add_argument("--min-period", type=int, default=1, help="Minimum period size (default: 1)")
     parser.add_argument("--max-period", type=int, default=2000, help="Maximum period size (default: 2000)")
+    parser.add_argument("--min-array-bp", type=int, default=None,
+                        help="Minimum repeat array length in bp (default: no minimum)")
+    parser.add_argument("--max-array-bp", type=int, default=None,
+                        help="Maximum repeat array length in bp (default: no maximum)")
+    parser.add_argument("--tiers", type=str, default="tier1,tier2,tier3",
+                        help="Comma-separated list of tiers to run (tier1,tier2,tier3) or 'all'")
     parser.add_argument("--output", "-o", help="Output file prefix (default: input filename)")
     parser.add_argument("--format", choices=["bed", "vcf", "trf", "strfinder"], default="bed", help="Output format")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")
+    parser.add_argument("--profile", action="store_true", help="Profile execution with cProfile and print top hotspots")
     
     args = parser.parse_args()
     
@@ -48,6 +55,19 @@ def main():
     
     all_repeats: List[TandemRepeat] = []
     
+    tiers_arg = args.tiers.strip()
+    if tiers_arg.lower() == "all":
+        enabled_tiers = {"tier1", "tier2", "tier3"}
+    else:
+        enabled_tiers = {t.strip().lower() for t in tiers_arg.split(',') if t.strip()}
+
+    # Optional profiler
+    profiler = None
+    if args.profile:
+        import cProfile
+        profiler = cProfile.Profile()
+        profiler.enable()
+
     for chrom, seq in parse_fasta(args.fasta_file):
         seq = seq.upper()
         
@@ -59,7 +79,10 @@ def main():
             chromosome=chrom,
             min_period=args.min_period,
             max_period=args.max_period,
-            show_progress=args.verbose
+            show_progress=args.verbose,
+            enabled_tiers=enabled_tiers,
+            min_array_bp=args.min_array_bp,
+            max_array_bp=args.max_array_bp
         )
         
         repeats = finder.find_all()
@@ -67,8 +90,21 @@ def main():
         
         finder.cleanup()
         
+    # Stop profiler and report
+    if profiler is not None:
+        profiler.disable()
+    
     print(f"Total repeats found: {len(all_repeats)}")
     print(f"Total time: {time.time() - start_total:.2f}s")
+    
+    if profiler is not None:
+        import pstats
+        profile_path = f"{output_prefix}.tier2_profile.prof"
+        profiler.dump_stats(profile_path)
+        print(f"Profile written to {profile_path}")
+        print("Top 20 cumulative time hotspots:")
+        stats = pstats.Stats(profiler)
+        stats.strip_dirs().sort_stats("cumulative").print_stats(20)
     
     # Write output
     if args.format == "bed":

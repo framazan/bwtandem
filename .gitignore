@@ -3,3 +3,11 @@
 Athaliana_167_TAIR9.fa
 *.nbc
 /__pycache__
+/build
+.DS_Store
+*.prof
+*.so
+*.html
+*.dat
+*.mask
+
