@@ -1,3 +1,0 @@
-# Tandem Repeats (BED format)
-# chrom	start	end	motif	copies	tier
-1	0	84	ACCCCTCAGGGT	7.0	2
