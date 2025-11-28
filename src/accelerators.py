@@ -58,6 +58,32 @@ if _native is not None:
         return _native.scan_simple_repeats(
             text_arr, tier1_mask, n, min_p, max_p, period_step, position_step, allowed_mismatch_rate
         )
+
+    def find_periodic_patterns(
+        positions: np.ndarray,
+        min_period: int,
+        max_period: int,
+        min_copies: int,
+        tolerance_ratio: float = 0.01
+    ) -> list:
+        return _native.find_periodic_patterns(positions, min_period, max_period, min_copies, tolerance_ratio)
+
+    def find_periodic_runs(
+        positions: np.ndarray,
+        min_period: int,
+        max_period: int,
+        min_copies: int,
+        tolerance_ratio: float = 0.01
+    ) -> list:
+        return _native.find_periodic_runs(positions, min_period, max_period, min_copies, tolerance_ratio)
+
+    def align_unit_to_window(
+        motif: bytes,
+        window: bytes,
+        max_indel: int,
+        mismatch_tolerance: int
+    ) -> Optional[Tuple]:
+        return _native.align_unit_to_window(motif, window, max_indel, mismatch_tolerance)
 else:
     def hamming_distance(arr1: np.ndarray, arr2: np.ndarray) -> Optional[int]:
         return None
@@ -93,5 +119,31 @@ else:
         period_step: int,
         position_step: int,
         allowed_mismatch_rate: float
+    ) -> list:
+        return []
+
+    def find_periodic_patterns(
+        positions: np.ndarray,
+        min_period: int,
+        max_period: int,
+        min_copies: int,
+        tolerance_ratio: float = 0.01
+    ) -> list:
+        return []
+
+    def align_unit_to_window(
+        motif: bytes,
+        window: bytes,
+        max_indel: int,
+        mismatch_tolerance: int
+    ) -> Optional[Tuple]:
+        return None
+
+    def find_periodic_runs(
+        positions: np.ndarray,
+        min_period: int,
+        max_period: int,
+        min_copies: int,
+        tolerance_ratio: float = 0.01
     ) -> list:
         return []

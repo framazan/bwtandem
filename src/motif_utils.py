@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict, Iterator, Optional
 from collections import Counter
 import math
 from .models import AlignmentResult, RepeatAlignmentSummary, RefinedRepeat, TandemRepeat
+from .accelerators import align_unit_to_window
 
 class MotifUtils:
     """Utilities for canonical motif handling."""
@@ -161,6 +162,29 @@ class MotifUtils:
     def _align_unit_to_window(motif: str, window: str, max_indel: int,
                               mismatch_tolerance: int) -> Optional[AlignmentResult]:
         """Align motif to a window allowing mismatches and small indels."""
+        # Try accelerated version first
+        try:
+            # Convert to bytes for Cython
+            motif_bytes = motif.encode('ascii')
+            window_bytes = window.encode('ascii')
+            res = align_unit_to_window(motif_bytes, window_bytes, max_indel, mismatch_tolerance)
+            if res is not None:
+                (consumed, unit_sequence, mismatch_count, insertion_len, 
+                 deletion_len, operations, observed_bases, edit_distance) = res
+                 
+                return AlignmentResult(
+                    consumed=consumed,
+                    unit_sequence=unit_sequence,
+                    mismatch_count=mismatch_count,
+                    insertion_length=insertion_len,
+                    deletion_length=deletion_len,
+                    operations=operations,
+                    observed_bases=observed_bases,
+                    edit_distance=edit_distance
+                )
+        except Exception:
+            pass # Fallback to Python implementation
+
         m = len(motif)
         n = len(window)
 

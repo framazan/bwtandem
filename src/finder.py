@@ -145,8 +145,27 @@ class TandemRepeatFinder:
             print(f"  [{self.chromosome}] Skipping Tier 2 (disabled)", flush=True)
 
         # --- Tier 3: Long Reads (Optional/Advanced) ---
-        # Currently Tier 2 covers most cases, so Tier 3 is a placeholder for future expansion
-        # or very specific long-read logic.
+        if self.tier3:
+            if self.show_progress:
+                print(f"  [{self.chromosome}] Running Tier 3 (Long Reads)...", flush=True)
+            t0 = time.time()
+            
+            combined_seen = tier1_seen.union(tier2_seen)
+            tier3_repeats = self.tier3.find_long_repeats(
+                self.chromosome,
+                tier1_seen,
+                tier2_seen
+            )
+            
+            accepted = 0
+            for r in tier3_repeats:
+                if self._register_repeat(r, all_repeats, combined_seen):
+                    accepted += 1
+            
+            if self.show_progress:
+                print(f"  [{self.chromosome}] Tier 3 found {accepted} repeats in {time.time() - t0:.2f}s", flush=True)
+        elif self.show_progress:
+            print(f"  [{self.chromosome}] Skipping Tier 3 (disabled)", flush=True)
         
         # --- Post-processing ---
         # Sort by position

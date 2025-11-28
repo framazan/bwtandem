@@ -424,3 +424,358 @@ cpdef list scan_simple_repeats(
             i += position_step
             
     return results
+
+cpdef list find_periodic_patterns(long[:] positions, int min_period, int max_period, int min_copies, double tolerance_ratio=0.01):
+    """Find periodic patterns in a sorted list of positions."""
+    cdef int n = positions.shape[0]
+    cdef list results = []
+    cdef int i, j, k
+    cdef long p1, p2, diff, next_val, last_val, target
+    cdef int count
+    cdef int tolerance
+    
+    if n < min_copies:
+        return results
+
+    # Limit N to avoid O(N^2) explosion on highly repetitive k-mers
+    if n > 500:
+        n = 500
+
+    for i in range(n):
+        p1 = positions[i]
+        for j in range(i + 1, n):
+            p2 = positions[j]
+            diff = p2 - p1
+            
+            if diff < min_period:
+                continue
+            if diff > max_period:
+                break 
+            
+            count = 2
+            last_val = p2
+            
+            for k in range(j + 1, n):
+                next_val = positions[k]
+                target = last_val + diff
+                tolerance = <int>(diff * tolerance_ratio) + 1
+                
+                if next_val < target - tolerance:
+                    continue
+                elif next_val > target + tolerance:
+                    break
+                else:
+                    count += 1
+                    last_val = next_val
+            
+            if count >= min_copies:
+                results.append((p1, last_val, diff))
+                
+    return results
+
+cpdef list find_periodic_runs(long[:] positions, int min_period, int max_period, int min_copies, double tolerance_ratio=0.01):
+    """Detect periodic runs using adjacent gaps only (O(k)).
+
+    Returns list of (start_pos, end_pos, period).
+    A run requires at least `min_copies` positions, i.e., at least `min_copies-1` consecutive gaps
+    within tolerance and within [min_period, max_period].
+    """
+    cdef int n = positions.shape[0]
+    cdef list results = []
+    if n < min_copies:
+        return results
+
+    cdef long prev_pos = positions[0]
+    cdef double last_diff = -1.0
+    cdef int run_start_idx = 0
+    cdef int gap_count = 0  # number of consecutive gaps consistent with last_diff
+    cdef long cur_pos
+    cdef double diff
+    cdef double tol
+    cdef int i
+    cdef long run_start_pos
+    cdef long run_end_pos
+    cdef int period_int
+
+    for i in range(1, n):
+        cur_pos = positions[i]
+        diff = cur_pos - prev_pos
+        prev_pos = cur_pos
+
+        if diff < min_period or diff > max_period:
+            # finish any existing run
+            if gap_count + 1 >= min_copies:
+                run_start_pos = positions[run_start_idx]
+                run_end_pos = positions[i - 1]
+                period_int = <int>(last_diff + 0.5)
+                results.append((run_start_pos, run_end_pos, period_int))
+            # reset
+            run_start_idx = i
+            gap_count = 0
+            last_diff = -1.0
+            continue
+
+        if last_diff < 0:
+            last_diff = diff
+            gap_count = 1
+            run_start_idx = i - 1
+        else:
+            tol = last_diff * tolerance_ratio
+            if tol < 1.0:
+                tol = 1.0
+            if diff >= last_diff - tol and diff <= last_diff + tol:
+                gap_count += 1
+            else:
+                # end current run
+                if gap_count + 1 >= min_copies:
+                    run_start_pos = positions[run_start_idx]
+                    run_end_pos = positions[i - 1]
+                    period_int = <int>(last_diff + 0.5)
+                    results.append((run_start_pos, run_end_pos, period_int))
+                # start new run with this gap
+                last_diff = diff
+                gap_count = 1
+                run_start_idx = i - 1
+
+    # flush at end
+    if gap_count + 1 >= min_copies:
+        run_start_pos = positions[run_start_idx]
+        run_end_pos = positions[n - 1]
+        period_int = <int>(last_diff + 0.5)
+        results.append((run_start_pos, run_end_pos, period_int))
+
+    return results
+
+from libc.stdlib cimport malloc, free
+
+cpdef tuple align_unit_to_window(
+    const unsigned char[:] motif, 
+    const unsigned char[:] window, 
+    int max_indel, 
+    int mismatch_tolerance
+):
+    """Cython implementation of Needleman-Wunsch alignment for repeat units."""
+    cdef int m = motif.shape[0]
+    cdef int n = window.shape[0]
+    
+    if m == 0 or n == 0:
+        return None
+
+    if max_indel < 0: max_indel = 0
+    if mismatch_tolerance < 0: mismatch_tolerance = 0
+
+    cdef int lower = m - max_indel
+    if lower < 0: lower = 0
+    cdef int upper = m + max_indel
+    if upper > n: upper = n
+    
+    if lower > upper:
+        return None
+
+    cdef int inf = m + n + 10
+    cdef int rows = m + 1
+    cdef int cols = n + 1
+    
+    # Allocate flattened arrays
+    cdef int* dp = <int*> malloc(rows * cols * sizeof(int))
+    cdef char* ptr = <char*> malloc(rows * cols * sizeof(char))
+    
+    if not dp or not ptr:
+        if dp: free(dp)
+        if ptr: free(ptr)
+        raise MemoryError()
+
+    cdef int i, j, idx
+    cdef int sub_cost, del_cost, ins_cost, best_cost
+    cdef char best_ptr
+    cdef int j_min, j_max
+    cdef int band_extra = max_indel + 2
+    cdef int best_j
+    cdef int min_final_cost
+    cdef char op
+    cdef int mismatch_count
+    cdef int insertion_len
+    cdef int deletion_len
+    cdef int ref_pos
+    cdef int pending_ins_pos
+    cdef int pending_del_len
+    cdef int pending_del_pos
+    cdef int r_code, q_code
+    cdef str r_char, q_char
+    
+    # 0=Stop, 1=Match(M), 2=Sub(S), 3=Del(D), 4=Ins(I)
+    
+    try:
+        # Initialize
+        for i in range(rows):
+            for j in range(cols):
+                dp[i * cols + j] = inf
+                ptr[i * cols + j] = 0
+        
+        dp[0] = 0
+        for j in range(1, cols):
+            dp[j] = j
+            ptr[j] = 4 # I
+            
+        for i in range(1, rows):
+            dp[i * cols] = i
+            ptr[i * cols] = 3 # D
+            
+        # Fill DP
+        for i in range(1, rows):
+            j_min = i - band_extra
+            if j_min < 1: j_min = 1
+            j_max = i + band_extra
+            if j_max > n: j_max = n
+            
+            for j in range(j_min, j_max + 1):
+                # Match/Sub
+                sub_cost = dp[(i - 1) * cols + (j - 1)] + (1 if motif[i - 1] != window[j - 1] else 0)
+                # Del (gap in window, consume motif)
+                del_cost = dp[(i - 1) * cols + j] + 1
+                # Ins (gap in motif, consume window)
+                ins_cost = dp[i * cols + (j - 1)] + 1
+                
+                best_cost = sub_cost
+                best_ptr = 1 if motif[i - 1] == window[j - 1] else 2 # M or S
+                
+                if del_cost < best_cost:
+                    best_cost = del_cost
+                    best_ptr = 3 # D
+                if ins_cost < best_cost:
+                    best_cost = ins_cost
+                    best_ptr = 4 # I
+                    
+                dp[i * cols + j] = best_cost
+                ptr[i * cols + j] = best_ptr
+                
+        # Find best end
+        best_j = -1
+        min_final_cost = inf
+        
+        for j in range(lower, upper + 1):
+            cost = dp[m * cols + j]
+            if cost < min_final_cost:
+                min_final_cost = cost
+                best_j = j
+                
+        if best_j <= 0 or min_final_cost >= inf:
+            return None
+            
+        # Backtrack
+        # We need to reconstruct the alignment
+        # Since we can't easily append to lists in reverse in C, we'll use a temporary buffer or just Python lists
+        
+        aligned_ref_codes = []
+        aligned_query_codes = []
+        
+        i = m
+        j = best_j
+        
+        while i > 0 or j > 0:
+            op = ptr[i * cols + j]
+            if op == 1 or op == 2: # M or S
+                aligned_ref_codes.append(motif[i - 1])
+                aligned_query_codes.append(window[j - 1])
+                i -= 1
+                j -= 1
+            elif op == 3: # D
+                aligned_ref_codes.append(motif[i - 1])
+                aligned_query_codes.append(45) # '-' is 45
+                i -= 1
+            elif op == 4: # I
+                aligned_ref_codes.append(45) # '-'
+                aligned_query_codes.append(window[j - 1])
+                j -= 1
+            else:
+                break
+                
+        # Reverse
+        aligned_ref_codes.reverse()
+        aligned_query_codes.reverse()
+        
+        # Process alignment to generate operations
+        operations = []
+        observed_bases = []
+        mismatch_count = 0
+        insertion_len = 0
+        deletion_len = 0
+        
+        ref_pos = 0
+        pending_ins = []
+        pending_ins_pos = 0
+        pending_del_len = 0
+        pending_del_pos = 0
+        
+        for k in range(len(aligned_ref_codes)):
+            r_code = aligned_ref_codes[k]
+            q_code = aligned_query_codes[k]
+            
+            r_char = chr(r_code)
+            q_char = chr(q_code)
+            
+            if r_char == '-':
+                if not pending_ins:
+                    pending_ins_pos = ref_pos
+                pending_ins.append(q_char)
+                continue
+                
+            if pending_ins:
+                ins_seq = "".join(pending_ins)
+                operations.append(('ins', pending_ins_pos, ins_seq))
+                insertion_len += len(ins_seq)
+                pending_ins = []
+                pending_ins_pos = 0
+                
+            ref_pos += 1
+            
+            if q_char == '-':
+                if pending_del_len == 0:
+                    pending_del_pos = ref_pos
+                pending_del_len += 1
+                continue
+                
+            if pending_del_len > 0:
+                operations.append(('del', pending_del_pos, pending_del_len))
+                deletion_len += pending_del_len
+                pending_del_len = 0
+                
+            observed_bases.append((ref_pos - 1, q_char))
+            
+            if r_code != q_code:
+                operations.append(('sub', ref_pos, r_char, q_char))
+                mismatch_count += 1
+                
+        if pending_ins:
+            ins_seq = "".join(pending_ins)
+            operations.append(('ins', pending_ins_pos, ins_seq))
+            insertion_len += len(ins_seq)
+            
+        if pending_del_len > 0:
+            operations.append(('del', pending_del_pos, pending_del_len))
+            deletion_len += pending_del_len
+            
+        if mismatch_count > mismatch_tolerance:
+            return None
+            
+        if insertion_len > max_indel or deletion_len > max_indel:
+            return None
+            
+        # Construct unit_sequence from window
+        # window is bytes/memoryview, convert to string
+        unit_sequence = bytes(window[:best_j]).decode('ascii', 'replace')
+        
+        return (
+            best_j,
+            unit_sequence,
+            mismatch_count,
+            insertion_len,
+            deletion_len,
+            operations,
+            observed_bases,
+            min_final_cost
+        )
+        
+    finally:
+        free(dp)
+        free(ptr)
