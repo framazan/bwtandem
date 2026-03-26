@@ -6,6 +6,14 @@ from typing import List, Iterator, Tuple
 from .finder import TandemRepeatFinder
 from .models import TandemRepeat
 
+
+def _resolve_output_file(output_prefix: str, extension: str) -> str:
+    """Return output path while avoiding duplicated extensions."""
+    ext = extension if extension.startswith(".") else f".{extension}"
+    if output_prefix.lower().endswith(ext.lower()):
+        return output_prefix
+    return f"{output_prefix}{ext}"
+
 def parse_fasta(file_path: str) -> Iterator[Tuple[str, str]]:
     """Simple FASTA parser to avoid Biopython dependency."""
     name = None
@@ -48,7 +56,7 @@ def main():
         sys.exit(1)
         
     output_prefix = args.output if args.output else os.path.splitext(args.fasta_file)[0]
-    out_file = f"{output_prefix}.{args.format}" # Default output filename
+    out_file = _resolve_output_file(output_prefix, args.format)
     
     print(f"Processing {args.fasta_file}...")
     start_total = time.time()
@@ -108,30 +116,37 @@ def main():
     
     # Write output
     if args.format == "bed":
-        out_file = f"{output_prefix}.bed"
+        out_file = _resolve_output_file(output_prefix, "bed")
         with open(out_file, "w") as f:
             for r in all_repeats:
                 f.write(r.to_bed() + "\n")
     elif args.format == "vcf":
-        out_file = f"{output_prefix}.vcf"
+        out_file = _resolve_output_file(output_prefix, "vcf")
         with open(out_file, "w") as f:
             f.write("##fileformat=VCFv4.2\n")
+            f.write("##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the repeat\">\n")
             f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
             for r in all_repeats:
-                # Construct VCF line
-                ref = r.actual_sequence if r.actual_sequence else "N"
+                # Use a single anchor base for REF to keep symbolic-ALT records valid.
+                ref = "N"
+                if r.actual_sequence:
+                    ref = r.actual_sequence[0]
+                elif r.consensus_motif:
+                    ref = r.consensus_motif[0]
+                elif r.motif:
+                    ref = r.motif[0]
                 alt = "<STR>"
-                info = r.to_vcf_info()
+                info = f"END={r.end};{r.to_vcf_info()}"
                 f.write(f"{r.chrom}\t{r.start+1}\t.\t{ref}\t{alt}\t.\t.\t{info}\n")
     elif args.format == "trf":
-        out_file = f"{output_prefix}.dat"
+        out_file = _resolve_output_file(output_prefix, "dat")
         with open(out_file, "w") as f:
             for r in all_repeats:
                 f.write(r.to_trf_dat() + "\n")
     elif args.format == "strfinder":
-        out_file = f"{output_prefix}.csv"
+        out_file = _resolve_output_file(output_prefix, "csv")
         with open(out_file, "w") as f:
-            f.write("STR_marker\tSTR_position\tSTR_motif\tSTR_genotype_structure\tSTR_genotype\tSTR_core_seq\tAllele_coverage\tAlleles_ratio\tReads_Distribution\tSTR_depth\tFull_seq\tVariations\n")
+            f.write("STR_marker,STR_position,STR_motif,STR_genotype_structure,STR_genotype,STR_core_seq,Allele_coverage,Alleles_ratio,Reads_Distribution,STR_depth,Full_seq,Variations\n")
             for r in all_repeats:
                 f.write(r.to_strfinder() + "\n")
                 

@@ -490,6 +490,14 @@ class MotifUtils:
             return None
 
         primitive_len = MotifUtils.smallest_period_str(summary.consensus)
+        if primitive_len == len(summary.consensus):
+            # Conservative fallback: allow tiny noise when collapsing composite motifs.
+            approx_primitive_len = MotifUtils.smallest_period_str_approx(
+                summary.consensus,
+                max_error_rate=0.02,
+            )
+            if 0 < approx_primitive_len < primitive_len:
+                primitive_len = approx_primitive_len
         if primitive_len == 0:
             return None
 
@@ -537,6 +545,35 @@ class MotifUtils:
         for p in range(1, n + 1):
             if n % p == 0 and s == s[:p] * (n // p):
                 return p
+        return n
+
+    @staticmethod
+    def smallest_period_str_approx(s: str, max_error_rate: float = 0.02) -> int:
+        """Return smallest approximate period length for a noisy string.
+
+        A period p is accepted when s differs from repetitions of s[:p]
+        by at most max_error_rate.
+        """
+        if not s:
+            return 0
+
+        n = len(s)
+        if n == 1:
+            return 1
+
+        max_error_rate = max(0.0, min(0.05, max_error_rate))
+
+        for p in range(1, n + 1):
+            if n % p != 0:
+                continue
+            template = s[:p]
+            mismatches = 0
+            for i, ch in enumerate(s):
+                if ch != template[i % p]:
+                    mismatches += 1
+            if (mismatches / n) <= max_error_rate:
+                return p
+
         return n
 
     @staticmethod
