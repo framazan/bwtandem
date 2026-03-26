@@ -6,6 +6,7 @@ From: ubuntu:22.04
 
 %labels
     Author Filip Ramazan
+    Version v1.0
     Description BWT-based tandem repeat finder
 
 %environment
