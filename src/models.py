@@ -136,9 +136,9 @@ class TandemRepeat:
 
             variation_str = "-"
 
-            return (f"{marker}\t{position}\t{str_motif}\t{genotype_struct}\t{genotype}\t"
-                    f"{core_seq}\t{allele_coverage}\t{alleles_ratio}\t{reads_dist}\t"
-                    f"{str_depth}\t{full_seq}\t{variation_str}")
+            return (f"{marker},{position},{str_motif},{genotype_struct},{genotype},"
+                    f"{core_seq},{allele_coverage},{alleles_ratio},{reads_dist},"
+                    f"{str_depth},{full_seq},{variation_str}")
 
         # Regular (non-compound) repeat handling
         cons = self.consensus_motif or self.motif
@@ -215,9 +215,9 @@ class TandemRepeat:
         else:
             full_seq = full_seq_complete
 
-        return (f"{marker}\t{position}\t{str_motif}\t{genotype_struct}\t{genotype}\t"
-                f"{core_seq}\t{allele_coverage}\t{alleles_ratio}\t{reads_dist}\t"
-                f"{str_depth}\t{full_seq}\t{variation_str}")
+        return (f"{marker},{position},{str_motif},{genotype_struct},{genotype},"
+            f"{core_seq},{allele_coverage},{alleles_ratio},{reads_dist},"
+            f"{str_depth},{full_seq},{variation_str}")
 
 
 @dataclass

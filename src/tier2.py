@@ -117,6 +117,8 @@ class Tier2LCPFinder:
 
                     # Reduce to primitive period (e.g., 105bp -> 36bp if 105 is periodic)
                     primitive_period = MotifUtils.smallest_period_str(motif)
+                    if primitive_period == len(motif):
+                        primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
                     if primitive_period < len(motif):
                         # Use the primitive period instead
                         motif = motif[:primitive_period]
@@ -208,6 +210,8 @@ class Tier2LCPFinder:
 
                     # Reduce to primitive period (e.g., 105bp -> 36bp if 105 is periodic)
                     primitive_period = MotifUtils.smallest_period_str(motif)
+                    if primitive_period == len(motif):
+                        primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
                     if primitive_period < len(motif):
                         # Use the primitive period instead
                         motif = motif[:primitive_period]
