@@ -552,7 +552,9 @@ class MotifUtils:
         """Return smallest approximate period length for a noisy string.
 
         A period p is accepted when s differs from repetitions of s[:p]
-        by at most max_error_rate.
+        by at most max_error_rate. Unlike strict periodicity, p does not need
+        to divide len(s), which lets us collapse motifs that end in a partial
+        cycle (common after noisy extension/refinement).
         """
         if not s:
             return 0
@@ -563,8 +565,10 @@ class MotifUtils:
 
         max_error_rate = max(0.0, min(0.05, max_error_rate))
 
-        for p in range(1, n + 1):
-            if n % p != 0:
+        # Keep period search conservative: at least 2 repeats must fit.
+        for p in range(1, (n // 2) + 1):
+            repeats = n / p
+            if repeats < 2.0:
                 continue
             template = s[:p]
             mismatches = 0

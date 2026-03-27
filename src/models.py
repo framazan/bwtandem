@@ -31,8 +31,8 @@ class TandemRepeat:
 
     def to_bed(self) -> str:
         """Convert to BED format."""
-        cons = self.consensus_motif or self.motif
-        return f"{self.chrom}\t{self.start}\t{self.end}\t{cons}\t{self.copies:.1f}\t{self.tier}\t{self.mismatch_rate:.3f}\t{self.strand}"
+        # BED motif column should expose the primitive unit, not an expanded consensus block.
+        return f"{self.chrom}\t{self.start}\t{self.end}\t{self.motif}\t{self.copies:.1f}\t{self.tier}\t{self.mismatch_rate:.3f}\t{self.strand}"
 
     def to_vcf_info(self) -> str:
         """Convert to VCF INFO field."""
