@@ -13,6 +13,7 @@ From: ubuntu:22.04
     LC_ALL=C.UTF-8
     LANG=C.UTF-8
     PYTHONUNBUFFERED=1
+    PYTHONPATH=/opt/bwt-algorithm:${PYTHONPATH}
 
 %post
     # Install system dependencies
@@ -25,20 +26,34 @@ From: ubuntu:22.04
 
     # Install Python dependencies
     pip3 install --upgrade pip
-    pip3 install numpy numba pydivsufsort
+    pip3 install numpy numba pydivsufsort Cython
 
-    # Copy code into /opt/bwt-algorithm (done at build time)
-    mkdir -p /opt/bwt-algorithm
-    cp -r /mnt/* /opt/bwt-algorithm/
-    cd /opt/bwt-algorithm/src
+    cd /opt/bwt-algorithm
 
     # Compile Cython extension (if present)
-    if [ -f _accelerators.pyx ]; then 
-        cython3 _accelerators.pyx && gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing -I/usr/include/python3.10 -I/usr/local/lib/python3.10/dist-packages/numpy/core/include -o _accelerators.so _accelerators.c
+    if [ -f src/_accelerators.pyx ]; then
+        python3 - <<'PY'
+from setuptools import setup, Extension
+from Cython.Build import cythonize
+import numpy as np
+
+ext_modules = [
+    Extension(
+        "src._accelerators",
+        ["src/_accelerators.pyx"],
+        include_dirs=[np.get_include()],
+    )
+]
+
+setup(
+    script_args=["build_ext", "--inplace"],
+    ext_modules=cythonize(ext_modules, compiler_directives={"language_level": "3"}),
+)
+PY
     fi
 
 %files
-    . /mnt
+    . /opt/bwt-algorithm
 
 %runscript
-    exec python3 /opt/bwt-algorithm/src/main.py "$@"
+    exec python3 -m src.main "$@"
