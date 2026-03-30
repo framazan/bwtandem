@@ -9,7 +9,7 @@ import time
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore, _kasai_lcp_uint8
-from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats, pack_sequence
+from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats, pack_sequence, lcp_tandem_candidates, find_tandem_runs
 
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
@@ -38,6 +38,143 @@ class Tier2LCPFinder:
         self.allowed_mismatch_rate = max(0.0, allowed_mismatch_rate)
         self.allowed_indel_rate = max(0.0, allowed_indel_rate)
         self.sequence_str = self.bwt.text_arr.tobytes().decode('ascii', errors='replace')
+        self._lcp_cache = None  # Lazily computed LCP array
+        self._bwt_call_count = 0  # Track BWT usage for diagnostics
+
+    def _get_lcp_array(self) -> np.ndarray:
+        """Get (or compute and cache) the LCP array."""
+        if self._lcp_cache is None:
+            self._lcp_cache = self._compute_lcp_array()
+        return self._lcp_cache
+
+    def _bwt_find_repeats_for_period(
+        self, chromosome: str, period: int, seed_positions: List[int],
+        min_copies: int, covered: Set[Tuple[int, int]]
+    ) -> List[TandemRepeat]:
+        """BWT-driven repeat detection for a specific period.
+
+        Given seed positions (from LCP analysis), uses FM-index backward_search
+        and locate_positions to find all occurrences of the candidate motif,
+        then detects tandem runs and extends with mismatch tolerance.
+
+        Args:
+            chromosome: Chromosome name
+            period: Candidate repeat period
+            seed_positions: Starting text positions from LCP analysis
+            min_copies: Minimum tandem copies required
+            covered: Set of (start, end) regions already found (updated in-place)
+
+        Returns:
+            List of TandemRepeat objects found via BWT
+        """
+        repeats = []
+        text_arr = self.bwt.text_arr
+        n = int(text_arr.size)
+        if n > 0 and text_arr[n - 1] == 36:
+            n -= 1
+
+        seen_motifs: Set[str] = set()
+
+        for seed_pos in seed_positions:
+            if seed_pos + period > n:
+                continue
+
+            # Skip if this seed is already inside a covered region
+            skip = False
+            for cs, ce in covered:
+                if cs <= seed_pos < ce:
+                    skip = True
+                    break
+            if skip:
+                continue
+
+            # Extract candidate motif from this seed position
+            motif_arr = text_arr[seed_pos:seed_pos + period]
+            motif_str = motif_arr.tobytes().decode('ascii', errors='replace')
+
+            # Skip if we already tried this exact motif
+            if motif_str in seen_motifs:
+                continue
+            seen_motifs.add(motif_str)
+
+            # Skip non-DNA motifs
+            if not all(c in 'ACGT' for c in motif_str):
+                continue
+
+            # --- FM-index: find ALL occurrences of this motif in O(m) ---
+            self._bwt_call_count += 1
+            sp, ep = self.bwt.backward_search(motif_str)
+            if sp == -1:
+                continue
+
+            occ_count = ep - sp + 1
+
+            # Cap positions to avoid explosion on low-complexity motifs
+            if occ_count < min_copies:
+                continue
+            if occ_count > 5000:
+                continue  # Too common; brute-force fallback handles this
+
+            # Get all positions via suffix array lookup
+            positions = self.bwt.locate_positions(motif_str)
+            if len(positions) < min_copies:
+                continue
+
+            # Find tandem runs (arithmetic progressions with spacing = period)
+            pos_arr = np.array(sorted(positions), dtype=np.int64)
+            tandem_runs = find_tandem_runs(pos_arr, period, min_copies)
+
+            for run_start, run_end in tandem_runs:
+                run_start = int(run_start)
+                run_end = int(run_end)
+
+                # Skip if overlapping with already covered region
+                skip = False
+                for cs, ce in covered:
+                    overlap = min(ce, run_end) - max(cs, run_start)
+                    if overlap > 0 and overlap > (run_end - run_start) * 0.5:
+                        skip = True
+                        break
+                if skip:
+                    continue
+
+                # Extend with mismatch tolerance (handles imperfect repeats)
+                res = extend_with_mismatches(
+                    text_arr, run_start, period, n,
+                    self.allowed_mismatch_rate
+                )
+
+                if res is not None:
+                    arr_start, arr_end, copies, full_start, full_end = res
+                else:
+                    # Fallback: use the raw run boundaries
+                    full_start = run_start
+                    full_end = run_end
+                    copies = (run_end - run_start) // period
+                    arr_start = run_start
+                    arr_end = run_end
+
+                if copies < min_copies:
+                    continue
+
+                # Extract motif and reduce to primitive period
+                final_motif = text_arr[full_start:full_start + period].tobytes().decode('ascii', errors='replace')
+                primitive_period = MotifUtils.smallest_period_str(final_motif)
+                if primitive_period == len(final_motif):
+                    primitive_period = MotifUtils.smallest_period_str_approx(final_motif, max_error_rate=0.02)
+                if primitive_period < len(final_motif):
+                    final_motif = final_motif[:primitive_period]
+                    copies = (full_end - full_start) // primitive_period
+
+                repeat = self._refine_and_create_repeat(
+                    chromosome, full_start, full_end, final_motif,
+                    tier=2, min_copies=max(2, min_copies)
+                )
+                if repeat:
+                    repeats.append(repeat)
+                    covered.add((repeat.start, repeat.end))
+
+        return repeats
 
     def _refine_and_create_repeat(self, chromosome: str, start: int, end: int, motif: str,
                                   tier: int, min_copies: Optional[int] = None,
@@ -72,10 +209,13 @@ class Tier2LCPFinder:
     def find_long_unit_repeats_strict(self, chromosome: str, min_unit_len: int = 20,
                                       max_unit_len: int = 120, max_mismatch: int = 2,
                                       min_copies: int = 2) -> List[TandemRepeat]:
-        """Find long-unit tandem repeats using strict adjacency checking.
+        """Find long-unit tandem repeats using BWT/LCP-driven detection with brute-force fallback.
 
-        This detects biologically meaningful long repeats (20-120bp units) and avoids
-        reporting nested short-motif periodicities inside them.
+        Phase A: Uses suffix array and LCP array to identify tandem repeat
+                 signatures, then FM-index backward_search/locate_positions
+                 to find all occurrences and extend with mismatch tolerance.
+        Phase B: Falls back to brute-force sliding window on regions not
+                 covered by Phase A.
 
         Args:
             chromosome: Chromosome name
@@ -90,60 +230,107 @@ class Tier2LCPFinder:
         repeats = []
         text_arr = self.bwt.text_arr
         n = int(text_arr.size)
-        # print(f"[DEBUG] Searching chrom={chromosome}, seq_len={n}, min_unit={min_unit_len}, max_unit={max_unit_len}")
 
         # Exclude sentinel
         if n > 0 and text_arr[n - 1] == 36:  # '$' = 36
             n -= 1
 
+        covered: Set[Tuple[int, int]] = set()
+
+        # ===== Phase A: BWT/LCP-driven detection =====
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 long-unit: Phase A (BWT/LCP) starting...", flush=True)
+
+        lcp = self._get_lcp_array()
+        sa = self.bwt.suffix_array.astype(np.int32, copy=False)
+
+        # Scan LCP array for tandem repeat signatures
+        candidates = lcp_tandem_candidates(sa, lcp, n, min_unit_len, max_unit_len)
+
+        # Group candidates by period
+        period_seeds: dict = {}  # period -> list of seed positions
+        for period, start_pos in candidates:
+            if period not in period_seeds:
+                period_seeds[period] = []
+            period_seeds[period].append(start_pos)
+
+        # Process each period using BWT (longest first for proper nesting)
+        bwt_found = 0
+        for period in sorted(period_seeds.keys(), reverse=True):
+            seeds = period_seeds[period]
+            # Deduplicate seed positions
+            unique_seeds = sorted(set(seeds))
+
+            bwt_repeats = self._bwt_find_repeats_for_period(
+                chromosome, period, unique_seeds, min_copies, covered
+            )
+            repeats.extend(bwt_repeats)
+            bwt_found += len(bwt_repeats)
+
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 long-unit: Phase A found {bwt_found} repeats "
+                  f"({len(candidates)} LCP candidates, {self._bwt_call_count} FM-index queries)", flush=True)
+
+        # ===== Phase B: Brute-force fallback on uncovered regions =====
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 long-unit: Phase B (brute-force fallback)...", flush=True)
+
         # Pre-pack sequence for 2-bit acceleration
         packed_arr = pack_sequence(text_arr)
 
-        # For each candidate unit length - PROCESS IN REVERSE ORDER (longest first)
-        # This ensures we detect [AT]n before [A]n, [GCG]n before [GC]n, etc.
+        # Build coverage mask from Phase A results
+        covered_mask = np.zeros(n, dtype=bool)
+        for cs, ce in covered:
+            covered_mask[cs:min(ce, n)] = True
+
+        fallback_found = 0
         max_possible_unit = min(max_unit_len, n // min_copies)
         for unit_len in range(max_possible_unit, min_unit_len - 1, -1):
             # Use accelerated scanner if available
-            candidates = scan_unit_repeats(text_arr, n, unit_len, min_copies, max_mismatch, packed_arr)
-            
-            if candidates is not None:
-                for start_pos, end_pos in candidates:
+            fb_candidates = scan_unit_repeats(text_arr, n, unit_len, min_copies, max_mismatch, packed_arr)
+
+            if fb_candidates is not None:
+                for start_pos, end_pos in fb_candidates:
+                    # Skip if mostly covered by Phase A
+                    region_covered = np.sum(covered_mask[start_pos:end_pos])
+                    if region_covered > (end_pos - start_pos) * 0.5:
+                        continue
+
                     length = end_pos - start_pos
                     count = length // unit_len
-                    
-                    # Get the first unit as the motif
+
                     motif_arr = text_arr[start_pos:start_pos + unit_len]
                     motif = motif_arr.tobytes().decode('ascii', errors='replace')
 
-                    # Reduce to primitive period (e.g., 105bp -> 36bp if 105 is periodic)
                     primitive_period = MotifUtils.smallest_period_str(motif)
                     if primitive_period == len(motif):
                         primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
                     if primitive_period < len(motif):
-                        # Use the primitive period instead
                         motif = motif[:primitive_period]
-                        # Recalculate count based on primitive period
                         count = length // primitive_period
 
                     repeat = self._refine_and_create_repeat(
-                        chromosome,
-                        start_pos,
-                        end_pos,
-                        motif,
-                        tier=2,
-                        min_copies=max(2, min_copies)
+                        chromosome, start_pos, end_pos, motif,
+                        tier=2, min_copies=max(2, min_copies)
                     )
                     if repeat:
                         repeats.append(repeat)
+                        covered.add((repeat.start, repeat.end))
+                        covered_mask[repeat.start:min(repeat.end, n)] = True
+                        fallback_found += 1
                 continue
 
+            # Manual fallback (no Cython scanner)
             i = 0
             while i + unit_len * min_copies <= n:
-                # Test if there's at least one adjacency starting at i
+                # Skip if covered by Phase A
+                if covered_mask[i]:
+                    i += 1
+                    continue
+
                 count = 1
                 start_pos = i
 
-                # Extend right while adjacency holds
                 while True:
                     a_start = i + (count - 1) * unit_len
                     a_end = i + count * unit_len
@@ -156,12 +343,8 @@ class Tier2LCPFinder:
                     a = text_arr[a_start:a_end]
                     b = text_arr[b_start:b_end]
 
-                    # Calculate dynamic error threshold (15% of unit length or max_mismatch, whichever is higher)
-                    # This allows for more variation in longer repeats
                     allowed_errors = max(max_mismatch, int(unit_len * 0.15))
 
-                    # 1. Check direct Hamming distance
-                    # Optimization: Use accelerator directly to avoid method call overhead
                     dist = hamming_distance(a, b)
                     if dist is None:
                         dist = int(np.sum(a != b))
@@ -170,71 +353,59 @@ class Tier2LCPFinder:
                         count += 1
                         continue
 
-                    # 2. Check for 1bp Indels (shift left/right)
-                    # This helps detect repeats even if they drift slightly off-grid
                     found_indel = False
-                    
-                    # Check shift -1 (deletion relative to grid)
                     if b_start > 0:
                         b_shifted = text_arr[b_start-1:b_end-1]
                         dist = hamming_distance(a, b_shifted)
                         if dist is None:
                             dist = int(np.sum(a != b_shifted))
-                            
                         if dist <= allowed_errors:
                             count += 1
                             found_indel = True
-                    
+
                     if not found_indel and b_end + 1 <= n:
-                        # Check shift +1 (insertion relative to grid)
                         b_shifted = text_arr[b_start+1:b_end+1]
                         dist = hamming_distance(a, b_shifted)
                         if dist is None:
                             dist = int(np.sum(a != b_shifted))
-                            
                         if dist <= allowed_errors:
                             count += 1
                             found_indel = True
-                            
+
                     if not found_indel:
                         break
 
-                # If we found enough copies, create a repeat
                 if count >= min_copies:
                     end_pos = i + count * unit_len
                     length = end_pos - i
 
-                    # Get the first unit as the motif
                     motif_arr = text_arr[i:i + unit_len]
                     motif = motif_arr.tobytes().decode('ascii', errors='replace')
 
-                    # Reduce to primitive period (e.g., 105bp -> 36bp if 105 is periodic)
                     primitive_period = MotifUtils.smallest_period_str(motif)
                     if primitive_period == len(motif):
                         primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
                     if primitive_period < len(motif):
-                        # Use the primitive period instead
                         motif = motif[:primitive_period]
-                        # Recalculate count based on primitive period
                         count = length // primitive_period
 
                     repeat = self._refine_and_create_repeat(
-                        chromosome,
-                        i,
-                        end_pos,
-                        motif,
-                        tier=2,
-                        min_copies=max(2, min_copies)
+                        chromosome, i, end_pos, motif,
+                        tier=2, min_copies=max(2, min_copies)
                     )
                     if not repeat:
                         i += 1
                         continue
-                    # if 'test8' in chromosome or 'test10' in chromosome:
-                    #     print(f"[DEBUG] Found repeat: chrom={chromosome}, start={i}, end={end_pos}, motif={motif[:20]}{'...' if len(motif)>20 else ''}, unit_len={unit_len}, copies={count}")
                     repeats.append(repeat)
-                    i = end_pos  # Jump past this repeat
+                    covered.add((repeat.start, repeat.end))
+                    covered_mask[repeat.start:min(repeat.end, n)] = True
+                    fallback_found += 1
+                    i = end_pos
                 else:
                     i += 1
+
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 long-unit: Phase B found {fallback_found} additional repeats", flush=True)
 
         return repeats
 
@@ -364,9 +535,12 @@ class Tier2LCPFinder:
 
     def _find_repeats_simple(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
                             max_scan_period: Optional[int] = None) -> List[TandemRepeat]:
-        """Simple scanning detector for tandem repeats with imperfect repeat support.
+        """BWT/LCP-driven repeat detection with brute-force fallback.
 
-        Optimized for long sequences with adaptive scanning.
+        Phase A: Uses suffix array and LCP array to identify tandem repeat
+                 signatures, then FM-index to find all occurrences and extend
+                 with mismatch tolerance.
+        Phase B: Falls back to brute-force period scanning on uncovered regions.
 
         Args:
             chromosome: Chromosome name
@@ -378,217 +552,205 @@ class Tier2LCPFinder:
         # Exclude trailing sentinel if present ('$' == 36)
         if n > 0 and s_arr[n - 1] == 36:
             n -= 1
-        
+
         # Determine max period
         if max_scan_period is not None:
             max_p = max_scan_period
         else:
-            # AGGRESSIVE max_period limits to prevent stalling
             max_p = min(self.max_period, max(1, n // 2))
-            if n > 100_000:  # > 100kb
+            if n > 100_000:
                 max_p = min(max_p, 500)
-            elif n > 10_000:  # > 10kb
+            elif n > 10_000:
                 max_p = min(max_p, 1000)
-            elif n > 1_000:  # > 1kb
+            elif n > 1_000:
                 max_p = min(max_p, n // 2)
             else:
                 max_p = min(max_p, n // 2)
-                
+
         min_p = min(self.min_period, max_p)
         results: List[TandemRepeat] = []
         seen: Set[Tuple[int, int, str]] = set()
+        covered: Set[Tuple[int, int]] = set()
 
-        # Optimize masking: create a bitmap for fast lookups
-        # This prevents O(n) checks on every iteration
+        # Build tier1 mask
         tier1_mask = np.zeros(n, dtype=bool)
         for start, end in tier1_seen:
-            tier1_mask[start:end] = True
+            tier1_mask[start:min(end, n)] = True
 
-        # AGGRESSIVE adaptive scanning to prevent stalling
-        # The _extend_with_mismatches is VERY expensive, so we need aggressive sampling
-        if n > 10_000_000:  # > 10 Mbp
+        start_time = time.time()
+
+        # ===== Phase A: BWT/LCP-driven detection =====
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 simple scan: Phase A (BWT/LCP) starting, n={n}, min_p={min_p}, max_p={max_p}", flush=True)
+
+        lcp = self._get_lcp_array()
+        sa = self.bwt.suffix_array.astype(np.int32, copy=False)
+
+        # Scan LCP array for tandem repeat signatures in the [min_p, max_p] range
+        candidates = lcp_tandem_candidates(sa, lcp, n, min_p, max_p)
+
+        # Group candidates by period
+        period_seeds: dict = {}
+        for period, start_pos in candidates:
+            # Skip positions covered by tier1
+            if start_pos < n and tier1_mask[start_pos]:
+                continue
+            if period not in period_seeds:
+                period_seeds[period] = []
+            period_seeds[period].append(start_pos)
+
+        # Process each period using BWT
+        bwt_found = 0
+        for period in sorted(period_seeds.keys(), reverse=True):
+            seeds = period_seeds[period]
+            unique_seeds = sorted(set(seeds))
+
+            bwt_repeats = self._bwt_find_repeats_for_period(
+                chromosome, period, unique_seeds,
+                min_copies=2 if period >= 20 else self.min_copies,
+                covered=covered
+            )
+
+            for r in bwt_repeats:
+                # Check against seen
+                is_new = True
+                for s_start, s_end, _ in seen:
+                    if s_start <= r.start and s_end >= r.end:
+                        is_new = False
+                        break
+                if is_new:
+                    results.append(r)
+                    seen.add((r.start, r.end, r.motif))
+                    bwt_found += 1
+
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 simple scan: Phase A found {bwt_found} repeats "
+                  f"({len(candidates)} LCP candidates) in {time.time() - start_time:.2f}s", flush=True)
+
+        # ===== Phase B: Brute-force fallback on uncovered regions =====
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 simple scan: Phase B (brute-force fallback)...", flush=True)
+
+        # Build coverage mask from Phase A + tier1
+        covered_mask = tier1_mask.copy()
+        for cs, ce in covered:
+            covered_mask[cs:min(ce, n)] = True
+
+        # Adaptive sampling for brute-force
+        if n > 10_000_000:
             position_step = 100
             period_step = 5
-        elif n > 5_000_000:  # > 5 Mbp
+        elif n > 5_000_000:
             position_step = 50
             period_step = 2
-        elif n > 2_000_000:  # > 2 Mbp (Increased from 1MB)
+        elif n > 2_000_000:
             position_step = 20
             period_step = 1
-        elif n > 500_000:  # > 500 kb (Increased from 100kb)
+        elif n > 500_000:
             position_step = 5
             period_step = 1
-        elif n > 100_000:  # > 100 kb
+        elif n > 100_000:
             position_step = 2
             period_step = 1
         else:
             position_step = 1
             period_step = 1
 
-        if self.show_progress:
-            print(
-                f"  [{chromosome}] Tier 2 starting scan: n={n}, min_p={min_p}, max_p={max_p}, pos_step={position_step}, period_step={period_step}",
-                flush=True,
-            )
-
-        # Safety counter to prevent infinite loops and timeout
-        max_iterations = 500_000  # Increased from 100k
-        iteration_count = 0
-        start_time = time.time()
-        max_time_seconds = 300  # Increased to 5 minutes per chromosome for Tier 2
-
-        # Use accelerated scanner if available
-        # Note: scan_simple_repeats handles the loops internally
-        # We pass tier1_mask as uint8 (bool is uint8 in numpy)
-        tier1_mask_uint8 = tier1_mask.view(np.uint8)
-        
-        candidates = scan_simple_repeats(
-            s_arr, tier1_mask_uint8, n, min_p, max_p, period_step, position_step, self.allowed_mismatch_rate
+        # Use accelerated scanner if available, passing covered_mask
+        covered_mask_uint8 = covered_mask.view(np.uint8)
+        fb_candidates = scan_simple_repeats(
+            s_arr, covered_mask_uint8, n, min_p, max_p, period_step, position_step, self.allowed_mismatch_rate
         )
-        
-        if candidates is not None:
-            # Process candidates from accelerator
-            for full_start, full_end, p in candidates:
-                # Check if we've seen this region
-                region_key = (full_start, full_end, "") # Motif added later
+
+        fallback_found = 0
+        if fb_candidates is not None:
+            for full_start, full_end, p in fb_candidates:
                 is_new = True
                 for s_start, s_end, _ in seen:
                     if s_start <= full_start and s_end >= full_end:
                         is_new = False
                         break
-                
+
                 if is_new:
                     motif_arr = s_arr[full_start:full_start + p]
                     motif = motif_arr.tobytes().decode('ascii', errors='replace')
 
                     repeat = self._refine_and_create_repeat(
-                        chromosome,
-                        full_start,
-                        full_end,
-                        motif,
-                        tier=2
+                        chromosome, full_start, full_end, motif, tier=2
                     )
-
                     if repeat:
                         results.append(repeat)
                         seen.add((full_start, full_end, repeat.motif))
-            
+                        fallback_found += 1
+
             if self.show_progress:
-                print(f"  [{chromosome}] Tier 2 processed {len(results)} repeats (>=10bp motifs) in {time.time() - start_time:.2f}s", flush=True)
+                print(f"  [{chromosome}] Tier 2 simple scan: Phase B found {fallback_found} additional repeats "
+                      f"in {time.time() - start_time:.2f}s total", flush=True)
             return results
 
-        total_periods = max(1, ((max_p - min_p) // period_step) + 1)
-        processed_periods = 0
-        last_period_value = None
-        next_progress_time = start_time + 2.0 if self.show_progress else None
+        # Manual brute-force fallback (no Cython)
+        max_iterations = 500_000
+        iteration_count = 0
+        max_time_seconds = 300
 
         for p in range(min_p, max_p + 1, period_step):
-            processed_periods += 1
-            last_period_value = p
-
-            if self.show_progress and next_progress_time is not None and time.time() >= next_progress_time:
-                pct = min(99.0, (processed_periods / total_periods) * 100.0)
-                print(
-                    f"  [{chromosome}] Tier 2 scan {pct:.1f}% (period {p}/{max_p}, ~{iteration_count} windows tested)",
-                    flush=True,
-                )
-                next_progress_time = time.time() + 2.0
-
-            # Check timeout
-            if iteration_count % 1000 == 0:
-                if time.time() - start_time > max_time_seconds:
-                    if self.show_progress:
-                        print(f"  [{chromosome}] Tier 2 timeout ({max_time_seconds}s) - stopping scan", flush=True)
-                    break
-
-            # Inner-loop progress: print once per minute within a single period
-            inner_next_progress_time = time.time() + 60.0 if self.show_progress else None
-            if self.show_progress:
-                print(f"  [{chromosome}] Tier 2 scanning period {p}...", flush=True)
+            if time.time() - start_time > max_time_seconds:
+                if self.show_progress:
+                    print(f"  [{chromosome}] Tier 2 timeout ({max_time_seconds}s) - stopping scan", flush=True)
+                break
 
             i = 0
             while i < n - p:
-                # Skip if already covered by Tier 1
-                if tier1_mask[i]:
+                if covered_mask[i]:
                     i += position_step
                     continue
 
-                # Check timeout and iterations
                 iteration_count += 1
                 if iteration_count > max_iterations:
                     break
 
-                # Inner-loop time-based progress (once per minute)
-                if self.show_progress and inner_next_progress_time is not None and time.time() >= inner_next_progress_time:
-                    pos_pct = min(100.0, (i / max(1, n - p)) * 100.0)
-                    print(
-                        f"  [{chromosome}] Tier 2 period {p}/{max_p}: {pos_pct:.1f}% of positions scanned (~{iteration_count} windows)",
-                        flush=True,
-                    )
-                    inner_next_progress_time = time.time() + 60.0
-
-                # Quick check for periodicity
-                # Compare s[i] with s[i+p]
-                # OPTIMIZATION: Check a small window (e.g. 4bp) instead of single base
-                # This reduces false positives by ~256x
                 check_len = min(4, p)
                 if i + p + check_len <= n:
                     if np.array_equal(s_arr[i:i + check_len], s_arr[i + p:i + p + check_len]):
-                        # Found a match, try to extend
-                        # Use mismatch tolerance
                         start_pos, end_pos, copies, full_start, full_end = self._extend_with_mismatches(
                             s_arr, i, p, n, self.allow_mismatches
                         )
 
-                        # Dynamic copy threshold: allow 2 copies for longer periods (>20bp)
                         required_copies = self.min_copies
                         if p >= 20:
                             required_copies = 2
 
                         if copies >= required_copies:
-                            # Check if we've seen this region
-                            region_key = (full_start, full_end, "") # Motif added later
                             is_new = True
                             for s_start, s_end, _ in seen:
                                 if s_start <= full_start and s_end >= full_end:
                                     is_new = False
                                     break
-                            
+
                             if is_new:
                                 motif_arr = s_arr[start_pos:start_pos + p]
                                 motif = motif_arr.tobytes().decode('ascii', errors='replace')
 
                                 repeat = self._refine_and_create_repeat(
-                                    chromosome,
-                                    full_start,
-                                    full_end,
-                                    motif,
-                                    tier=2
+                                    chromosome, full_start, full_end, motif, tier=2
                                 )
-
                                 if repeat:
                                     results.append(repeat)
                                     seen.add((full_start, full_end, repeat.motif))
-
-                                    # Skip past this repeat
+                                    fallback_found += 1
                                     i = full_end
                                     continue
-                
+
                 i += position_step
-            
+
             if iteration_count > max_iterations:
                 if self.show_progress:
                     print(f"  [{chromosome}] Tier 2 iteration limit reached - stopping scan", flush=True)
                 break
 
-        if self.show_progress and processed_periods:
-            pct = min(100.0, (processed_periods / total_periods) * 100.0)
-            period_display = last_period_value if last_period_value is not None else max_p
-            suffix = " (early stop)" if processed_periods < total_periods else ""
-            print(
-                f"  [{chromosome}] Tier 2 scan {pct:.1f}% complete (period {period_display}/{max_p}, ~{iteration_count} windows){suffix}",
-                flush=True,
-            )
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 2 simple scan: Phase B found {fallback_found} additional repeats "
+                  f"in {time.time() - start_time:.2f}s total", flush=True)
 
         return results
 

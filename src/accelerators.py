@@ -84,6 +84,22 @@ if _native is not None:
         mismatch_tolerance: int
     ) -> Optional[Tuple]:
         return _native.align_unit_to_window(motif, window, max_indel, mismatch_tolerance)
+
+    def lcp_tandem_candidates(
+        sa: np.ndarray,
+        lcp: np.ndarray,
+        n: int,
+        min_period: int,
+        max_period: int
+    ) -> list:
+        return _native.lcp_tandem_candidates(sa, lcp, n, min_period, max_period)
+
+    def find_tandem_runs(
+        positions: np.ndarray,
+        period: int,
+        min_copies: int
+    ) -> list:
+        return _native.find_tandem_runs(positions, period, min_copies)
 else:
     def hamming_distance(arr1: np.ndarray, arr2: np.ndarray) -> Optional[int]:
         return None
@@ -147,3 +163,59 @@ else:
         tolerance_ratio: float = 0.01
     ) -> list:
         return []
+
+    def lcp_tandem_candidates(
+        sa: np.ndarray,
+        lcp: np.ndarray,
+        n: int,
+        min_period: int,
+        max_period: int
+    ) -> list:
+        """Pure-Python fallback for LCP tandem candidate detection."""
+        results = []
+        sa_len = len(sa)
+        lcp_len = len(lcp)
+        limit = min(sa_len, lcp_len)
+        for i in range(1, limit):
+            L = int(lcp[i])
+            if L < min_period:
+                continue
+            pos_a = int(sa[i - 1])
+            pos_b = int(sa[i])
+            if pos_a >= n or pos_b >= n:
+                continue
+            diff = abs(pos_b - pos_a)
+            if diff < min_period or diff > max_period:
+                continue
+            if L < diff:
+                continue
+            start = min(pos_a, pos_b)
+            results.append((diff, start))
+        return results
+
+    def find_tandem_runs(
+        positions: np.ndarray,
+        period: int,
+        min_copies: int
+    ) -> list:
+        """Pure-Python fallback for tandem run detection."""
+        n_pos = len(positions)
+        if n_pos < min_copies:
+            return []
+        results = []
+        run_start = int(positions[0])
+        expected_next = run_start + period
+        count = 1
+        for i in range(1, n_pos):
+            if int(positions[i]) == expected_next:
+                count += 1
+                expected_next = int(positions[i]) + period
+            else:
+                if count >= min_copies:
+                    results.append((run_start, expected_next))
+                run_start = int(positions[i])
+                expected_next = run_start + period
+                count = 1
+        if count >= min_copies:
+            results.append((run_start, expected_next))
+        return results
