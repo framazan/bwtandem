@@ -370,17 +370,6 @@ class Tier2LCPFinder:
         allowed_rate = max(0.01, min(0.5, self.allowed_mismatch_rate))
         return max(1, int(np.ceil(allowed_rate * total_length)))
     
-    def find_short_imperfect_repeats(self, chromosome: str, tier1_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
-        """(Deprecated) Short imperfect 1-9bp search.
-
-        Kept for API compatibility but returns an empty list so that
-        Tier 2 focuses exclusively on motifs > 9bp. Use Tier1 for
-        microsatellites.
-        """
-        if self.show_progress:
-            print(f"  [{chromosome}] Tier 2: skipping short imperfect (1-9bp) search; handled by Tier 1")
-        return []
-
     def find_long_repeats(self, chromosome: str, tier1_seen: Optional[Set[Tuple[int, int]]] = None,
                          max_scan_period: Optional[int] = None) -> List[TandemRepeat]:
         """Find medium to long tandem repeats using a lightweight period scan.
@@ -404,78 +393,6 @@ class Tier2LCPFinder:
         sa = self.bwt.suffix_array.astype(np.int32, copy=False)
         return _kasai_lcp_uint8(text_codes, sa)
     
-    def _detect_lcp_plateaus(self, lcp_array: np.ndarray, chromosome: str) -> List[TandemRepeat]:
-        """Detect tandem repeats from LCP plateaus."""
-        repeats = []
-        n = len(lcp_array)
-        if n == 0:
-            return repeats
-        # Choose a single conservative threshold: max(min_period, 20), but <= max LCP and <= max_period
-        lcp_max = int(np.max(lcp_array))
-        if lcp_max < self.min_period:
-            return repeats
-        threshold = min(self.max_period, lcp_max)
-        threshold = max(self.min_period, min(threshold, 20))
-
-        i = 0
-        while i < n:
-            if lcp_array[i] >= threshold:
-                # Found a plateau
-                j = i
-                while j < n and lcp_array[j] >= threshold:
-                    j += 1
-                
-                # Analyze this interval in suffix array
-                # The interval is [i-1, j] in SA (since LCP[k] is between SA[k-1] and SA[k])
-                # But we need to be careful with indices
-                
-                # For simplicity, just take the representative length
-                period = int(np.median(lcp_array[i:j]))
-                
-                # Analyze SA interval [i-1, j] for tandem structure
-                sa_start = max(0, i - 1)
-                sa_end = min(n, j + 1)
-                
-                found = self._analyze_sa_interval_for_tandems(sa_start, sa_end, period, chromosome)
-                repeats.extend(found)
-                
-                i = j
-            else:
-                i += 1
-
-        return repeats
-
-    def _smallest_period(self, s: str) -> int:
-        """Return the length of the smallest period of s via prefix-function (KMP)."""
-        n = len(s)
-        pi = [0] * n
-        for i in range(1, n):
-            j = pi[i-1]
-            while j > 0 and s[i] != s[j]:
-                j = pi[j-1]
-            if s[i] == s[j]:
-                j += 1
-            pi[i] = j
-        p = n - pi[-1]
-        return p if p != 0 and n % p == 0 else n
-    
-    def _smallest_period_codes(self, arr: np.ndarray) -> int:
-        """Smallest period for a uint8 array using prefix-function (no strings)."""
-        n = int(arr.size)
-        if n == 0:
-            return 0
-        pi = np.zeros(n, dtype=np.int32)
-        j = 0
-        for i in range(1, n):
-            j = int(pi[i-1])
-            while j > 0 and arr[i] != arr[j]:
-                j = int(pi[j-1])
-            if arr[i] == arr[j]:
-                j += 1
-            pi[i] = j
-        p = n - int(pi[-1])
-        return p if p != 0 and n % p == 0 else n
-
     def _find_repeats_simple(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
                             max_scan_period: Optional[int] = None) -> List[TandemRepeat]:
         """BWT/LCP-driven repeat detection with brute-force fallback.
@@ -745,64 +662,6 @@ class Tier2LCPFinder:
 
         return array_start, array_end, copies, full_start, full_end
     
-    def _analyze_sa_interval_for_tandems(self, start_idx: int, end_idx: int, 
-                                       period: int, chromosome: str) -> List[TandemRepeat]:
-        """Analyze suffix array interval for tandem structure."""
-        repeats = []
-        
-        # Get suffix positions in this interval
-        positions = []
-        for i in range(start_idx, end_idx):
-            pos = self.bwt._get_suffix_position(i)
-            positions.append(pos)
-        
-        positions.sort()
-        
-        # Look for arithmetic progressions with difference = period
-        for i in range(len(positions)):
-            start_pos = positions[i]
-            current_pos = start_pos
-            copies = 1
-            
-            # Check subsequent positions
-            # This is O(N^2) in worst case, but N (interval size) is usually small
-            for j in range(i + 1, len(positions)):
-                if positions[j] == current_pos + period:
-                    copies += 1
-                    current_pos = positions[j]
-            
-            if copies >= self.min_copies:
-                end_pos = start_pos + copies * period
-                
-                # Verify the repeat content
-                motif_arr = self.bwt.text_arr[start_pos:start_pos + period]
-                motif = motif_arr.tobytes().decode('ascii', errors='replace')
-
-                repeat = self._refine_and_create_repeat(
-                    chromosome,
-                    start_pos,
-                    end_pos,
-                    motif,
-                    tier=2,
-                    min_copies=copies
-                )
-
-                if repeat:
-                    repeats.append(repeat)
-        
-        return repeats
-    
-    def _validate_periodicity_arr(self, text_arr: np.ndarray, motif_arr: np.ndarray, period: int) -> bool:
-        """Validate periodic structure by vectorized uint8 comparison."""
-        m = text_arr.size
-        if m < 2 * period:
-            return False
-        idx = np.arange(m, dtype=np.int32) % period
-        # Compare each position to motif at idx
-        matches = np.count_nonzero(text_arr == motif_arr[idx])
-        similarity = matches / m if m > 0 else 0.0
-        return bool(similarity >= 0.8)
-
     def _region_contains_point(self, regions: Set[Tuple[int, int]], point: int,
                                lock: Optional[threading.Lock] = None) -> bool:
         if lock:
