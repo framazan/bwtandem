@@ -10,6 +10,7 @@ from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore, _kasai_lcp_uint8
 from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats, pack_sequence, lcp_tandem_candidates, find_tandem_runs
+from .bwt_seed import bwt_kmer_seed_scan
 
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
@@ -237,39 +238,52 @@ class Tier2LCPFinder:
 
         covered: Set[Tuple[int, int]] = set()
 
-        # ===== Phase A: BWT/LCP-driven detection =====
-        if self.show_progress:
-            print(f"  [{chromosome}] Tier 2 long-unit: Phase A (BWT/LCP) starting...", flush=True)
+        # ===== Phase A: BWT k-mer seeding =====
+        # Use shared BWT seeding core: sample k-mers, FM-index lookup,
+        # periodic run detection, mismatch-tolerant extension.
+        # kmer_size < min_unit_len ensures each repeat copy contains a full k-mer.
+        # Stride is adaptive based on sequence length.
+        kmer_size = min(16, min_unit_len - 1) if min_unit_len > 6 else 6
+        stride = max(10, min(50, n // 2000))
 
-        lcp = self._get_lcp_array()
-        sa = self.bwt.suffix_array.astype(np.int32, copy=False)
+        covered_mask = np.zeros(n, dtype=bool)
 
-        # Scan LCP array for tandem repeat signatures
-        candidates = lcp_tandem_candidates(sa, lcp, n, min_unit_len, max_unit_len)
+        seed_candidates = bwt_kmer_seed_scan(
+            bwt=self.bwt,
+            min_period=min_unit_len,
+            max_period=max_unit_len,
+            kmer_size=kmer_size,
+            stride=stride,
+            min_copies=min_copies,
+            allowed_mismatch_rate=self.allowed_mismatch_rate,
+            covered_mask=covered_mask,
+            show_progress=self.show_progress,
+            label=f"{chromosome} Tier2-long",
+        )
 
-        # Group candidates by period
-        period_seeds: dict = {}  # period -> list of seed positions
-        for period, start_pos in candidates:
-            if period not in period_seeds:
-                period_seeds[period] = []
-            period_seeds[period].append(start_pos)
-
-        # Process each period using BWT (longest first for proper nesting)
+        # Convert seed candidates to TandemRepeats with Tier 2 post-processing
         bwt_found = 0
-        for period in sorted(period_seeds.keys(), reverse=True):
-            seeds = period_seeds[period]
-            # Deduplicate seed positions
-            unique_seeds = sorted(set(seeds))
+        for cand in seed_candidates:
+            motif = cand.motif
+            # Tier 2 post-processing: primitive period reduction
+            primitive_period = MotifUtils.smallest_period_str(motif)
+            if primitive_period == len(motif):
+                primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
+            if primitive_period < len(motif):
+                motif = motif[:primitive_period]
 
-            bwt_repeats = self._bwt_find_repeats_for_period(
-                chromosome, period, unique_seeds, min_copies, covered
+            repeat = self._refine_and_create_repeat(
+                chromosome, cand.start, cand.end, motif,
+                tier=2, min_copies=max(2, min_copies)
             )
-            repeats.extend(bwt_repeats)
-            bwt_found += len(bwt_repeats)
+            if repeat:
+                repeats.append(repeat)
+                covered.add((repeat.start, repeat.end))
+                covered_mask[repeat.start:min(repeat.end, n)] = True
+                bwt_found += 1
 
         if self.show_progress:
-            print(f"  [{chromosome}] Tier 2 long-unit: Phase A found {bwt_found} repeats "
-                  f"({len(candidates)} LCP candidates, {self._bwt_call_count} FM-index queries)", flush=True)
+            print(f"  [{chromosome}] Tier 2 long-unit: Phase A found {bwt_found} repeats", flush=True)
 
         # ===== Phase B: Brute-force fallback on uncovered regions =====
         if self.show_progress:
@@ -277,11 +291,6 @@ class Tier2LCPFinder:
 
         # Pre-pack sequence for 2-bit acceleration
         packed_arr = pack_sequence(text_arr)
-
-        # Build coverage mask from Phase A results
-        covered_mask = np.zeros(n, dtype=bool)
-        for cs, ce in covered:
-            covered_mask[cs:min(ce, n)] = True
 
         fallback_found = 0
         max_possible_unit = min(max_unit_len, n // min_copies)
@@ -579,62 +588,57 @@ class Tier2LCPFinder:
 
         start_time = time.time()
 
-        # ===== Phase A: BWT/LCP-driven detection =====
-        if self.show_progress:
-            print(f"  [{chromosome}] Tier 2 simple scan: Phase A (BWT/LCP) starting, n={n}, min_p={min_p}, max_p={max_p}", flush=True)
+        # ===== Phase A: BWT k-mer seeding =====
+        kmer_size = min(16, max(6, min_p - 1))
+        stride = max(10, min(50, n // 2000))
 
-        lcp = self._get_lcp_array()
-        sa = self.bwt.suffix_array.astype(np.int32, copy=False)
+        covered_mask = tier1_mask.copy()
 
-        # Scan LCP array for tandem repeat signatures in the [min_p, max_p] range
-        candidates = lcp_tandem_candidates(sa, lcp, n, min_p, max_p)
+        seed_candidates = bwt_kmer_seed_scan(
+            bwt=self.bwt,
+            min_period=min_p,
+            max_period=max_p,
+            kmer_size=kmer_size,
+            stride=stride,
+            min_copies=2 if min_p >= 20 else self.min_copies,
+            allowed_mismatch_rate=self.allowed_mismatch_rate,
+            covered_mask=covered_mask,
+            show_progress=self.show_progress,
+            label=f"{chromosome} Tier2-simple",
+        )
 
-        # Group candidates by period
-        period_seeds: dict = {}
-        for period, start_pos in candidates:
-            # Skip positions covered by tier1
-            if start_pos < n and tier1_mask[start_pos]:
-                continue
-            if period not in period_seeds:
-                period_seeds[period] = []
-            period_seeds[period].append(start_pos)
-
-        # Process each period using BWT
         bwt_found = 0
-        for period in sorted(period_seeds.keys(), reverse=True):
-            seeds = period_seeds[period]
-            unique_seeds = sorted(set(seeds))
+        for cand in seed_candidates:
+            motif = cand.motif
+            # Tier 2 post-processing: primitive period reduction
+            primitive_period = MotifUtils.smallest_period_str(motif)
+            if primitive_period == len(motif):
+                primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
+            if primitive_period < len(motif):
+                motif = motif[:primitive_period]
 
-            bwt_repeats = self._bwt_find_repeats_for_period(
-                chromosome, period, unique_seeds,
-                min_copies=2 if period >= 20 else self.min_copies,
-                covered=covered
+            repeat = self._refine_and_create_repeat(
+                chromosome, cand.start, cand.end, motif, tier=2
             )
-
-            for r in bwt_repeats:
-                # Check against seen
+            if repeat:
                 is_new = True
                 for s_start, s_end, _ in seen:
-                    if s_start <= r.start and s_end >= r.end:
+                    if s_start <= repeat.start and s_end >= repeat.end:
                         is_new = False
                         break
                 if is_new:
-                    results.append(r)
-                    seen.add((r.start, r.end, r.motif))
+                    results.append(repeat)
+                    seen.add((repeat.start, repeat.end, repeat.motif))
+                    covered.add((repeat.start, repeat.end))
                     bwt_found += 1
 
         if self.show_progress:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase A found {bwt_found} repeats "
-                  f"({len(candidates)} LCP candidates) in {time.time() - start_time:.2f}s", flush=True)
+                  f"in {time.time() - start_time:.2f}s", flush=True)
 
         # ===== Phase B: Brute-force fallback on uncovered regions =====
         if self.show_progress:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase B (brute-force fallback)...", flush=True)
-
-        # Build coverage mask from Phase A + tier1
-        covered_mask = tier1_mask.copy()
-        for cs, ce in covered:
-            covered_mask[cs:min(ce, n)] = True
 
         # Adaptive sampling for brute-force
         if n > 10_000_000:

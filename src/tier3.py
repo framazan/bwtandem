@@ -3,13 +3,16 @@ from typing import List, Tuple, Set, Optional
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
-from .accelerators import find_periodic_runs, extend_with_mismatches
+from .accelerators import extend_with_mismatches
+from .bwt_seed import bwt_kmer_seed_scan
 
 class Tier3LongReadFinder:
-    """Tier 3: Long-read repeat finder using seed-and-extend.
+    """Tier 3: Long-read repeat finder using BWT k-mer seeding.
 
-    Optimized for finding very long repeats (100bp+) that might have
-    significant variation or structural changes.
+    Uses the shared BWT seeding core (bwt_seed.py) with Tier 3-specific
+    parameters (long periods, sparse sampling, high divergence tolerance)
+    and Tier 3-specific post-processing (anchor-based boundary verification,
+    consensus from sampled copies).
     """
 
     def __init__(self, bwt_core: BWTCore, min_length: int = 100,
@@ -23,15 +26,19 @@ class Tier3LongReadFinder:
                           tier2_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
         """Find long repeats not caught by Tier 1 or Tier 2.
 
-        Uses a heuristic approach:
-        1. Sample k-mers at regular intervals
-        2. Use FM-index to find other occurrences
-        3. Check for periodicity between occurrences using Cython accelerator
+        Uses the shared BWT k-mer seeding pipeline with Tier 3 parameters:
+        - Large k-mers (20bp) for uniqueness
+        - Sparse sampling (stride=100) for speed
+        - Wide period range (100bp-100kbp)
+        - Higher divergence tolerance (20%)
+
+        Tier 3 post-processing:
+        - Anchor-based boundary verification for ultra-long arrays
+        - Consensus from sampled copies (not full DP) for efficiency
         """
-        repeats = []
         text_arr = self.bwt.text_arr
         n = text_arr.size
-        
+
         # Skip if sequence is too short
         if n < self.min_length * 2:
             return []
@@ -39,190 +46,151 @@ class Tier3LongReadFinder:
         # Create mask of already found regions
         mask = np.zeros(n, dtype=bool)
         for start, end in tier1_seen:
-            mask[start:end] = True
+            mask[start:min(end, n)] = True
         for start, end in tier2_seen:
-            mask[start:end] = True
+            mask[start:min(end, n)] = True
 
-        # Sampling parameters
-        sample_step = 100
-        kmer_size = 20  # Use long k-mers to ensure uniqueness
+        # ===== Phase A: Shared BWT k-mer seeding =====
+        seed_candidates = bwt_kmer_seed_scan(
+            bwt=self.bwt,
+            min_period=self.min_length,
+            max_period=self.max_length,
+            kmer_size=20,          # Long k-mers for uniqueness
+            stride=100,            # Sparse sampling for speed
+            min_copies=int(self.min_copies),
+            allowed_mismatch_rate=0.20,
+            tolerance_ratio=0.03,  # 3% tolerance for long repeats
+            max_occurrences=500,   # Aggressive cap for Tier 3
+            covered_mask=mask,
+            show_progress=False,
+            label=f"{chromosome} Tier3",
+        )
 
-        i = 0
+        # ===== Tier 3 post-processing =====
+        repeats = []
         seen_regions = set()
 
-        while i < n - kmer_size:
-            if mask[i]:
-                i += sample_step
+        for cand in seed_candidates:
+            region_key = (cand.start // max(cand.period, 1), cand.period)
+            if region_key in seen_regions:
                 continue
 
-            # Extract k-mer
-            kmer_arr = text_arr[i:i + kmer_size]
-            kmer = kmer_arr.tobytes().decode('ascii', errors='replace')
+            period = cand.period
+            copies = cand.copies
+            full_start = cand.start
+            full_end = cand.end
 
-            # Find occurrences
-            positions = self.bwt.locate_positions(kmer)
-            
-            if len(positions) >= self.min_copies:
-                # Convert to numpy array for Cython
-                pos_arr = np.array(sorted(positions), dtype=np.int64)
-                
-                # Find periodic patterns
-                # We look for periods between min_length and max_length
-                patterns = find_periodic_runs(
-                    pos_arr, 
-                    self.min_length, 
-                    self.max_length, 
-                    int(self.min_copies),
-                    tolerance_ratio=0.03 # 3% tolerance for long repeats
-                )
-                
-                for start_pos, end_pos, period in patterns:
-                    # Check if we've seen this region
-                    # end_pos from Cython is the start of the last k-mer
-                    # So the full span is roughly start_pos to end_pos + kmer_size
-                    
-                    # Avoid re-processing same region
-                    region_key = (start_pos // 100, period // 10) # Approximate key
-                    if region_key in seen_regions:
-                        continue
-                    
-                    # Verify and extend
-                    # We use the period found to try to extend
-                    # Use extend_with_mismatches
-                    
-                    res = extend_with_mismatches(
-                        text_arr, 
-                        start_pos, 
-                        period, 
-                        n, 
-                        allowed_mismatch_rate=0.2
+            # For ultra-long repeats (>100 copies or >10kb), use anchor-based
+            # boundary verification instead of expensive DP refinement
+            if copies > 100 or (full_end - full_start) > 10000:
+                motif_arr = text_arr[cand.seed_pos:cand.seed_pos + period]
+                if motif_arr.size < period:
+                    motif_arr = text_arr[full_start:full_start + period]
+                motif = motif_arr.tobytes().decode('ascii', errors='replace')
+
+                # Anchor-based boundary verification:
+                # Scan backward from seed to find true start
+                true_start = cand.seed_pos
+                true_end = cand.seed_pos + period
+
+                scan_start = max(0, cand.seed_pos - period * 50)
+                pos = cand.seed_pos - period
+                while pos >= scan_start:
+                    window = text_arr[pos:pos + period]
+                    if window.size == period:
+                        matches = np.sum(window == motif_arr)
+                        if matches / period >= 0.75:
+                            true_start = pos
+                            pos -= period
+                        else:
+                            break
+                    else:
+                        break
+
+                # Scan forward from seed to find true end
+                scan_end = min(n, cand.seed_pos + period * 600)
+                pos = cand.seed_pos + period
+                while pos + period <= scan_end:
+                    window = text_arr[pos:pos + period]
+                    if window.size == period:
+                        matches = np.sum(window == motif_arr)
+                        if matches / period >= 0.75:
+                            true_end = pos + period
+                            pos += period
+                        else:
+                            break
+                    else:
+                        break
+
+                true_copies = (true_end - true_start) / period
+
+                if true_copies >= self.min_copies:
+                    max_consensus_copies = min(int(true_copies), 20)
+                    consensus_arr, mm_rate, max_mm = MotifUtils.build_consensus_motif_array(
+                        text_arr, true_start, period, max_consensus_copies
                     )
-                    
-                    if res:
-                        arr_start, arr_end, copies, full_start, full_end = res
-                        
-                        if copies >= self.min_copies and (full_end - full_start) >= self.min_length:
-                            # Create repeat
-                            # Use arr_start for motif extraction (guaranteed good region from extend)
-                            motif_arr = text_arr[arr_start:arr_start + period]
-                            motif = motif_arr.tobytes().decode('ascii', errors='replace')
-                            
-                            # For ultra-long repeats (>100 copies or >10kb), skip expensive DP refinement
-                            # But trim boundaries using the seed position as anchor
-                            if copies > 100 or (full_end - full_start) > 10000:
-                                # The seed position (start_pos from pattern) is guaranteed to be in the repeat
-                                # Extract motif from the seed position, not from arr_start
-                                motif_arr = text_arr[start_pos:start_pos + period]
-                                motif = motif_arr.tobytes().decode('ascii', errors='replace')
-                                
-                                # Trim boundaries by checking periodicity from this anchor point
-                                true_start = start_pos
-                                true_end = start_pos + period
-                                
-                                # Scan backward from start_pos to find where repeats actually start
-                                scan_start = max(0, start_pos - period * 50)  # Look back up to 50 periods
-                                pos = start_pos - period
-                                while pos >= scan_start:
-                                    # Check if this position starts a good copy of the motif
-                                    window = text_arr[pos:pos + period]
-                                    if window.size == period:
-                                        matches = np.sum(window == motif_arr)
-                                        if matches / period >= 0.75:  # 75% match threshold
-                                            true_start = pos
-                                            pos -= period
-                                        else:
-                                            break
-                                    else:
-                                        break
-                                
-                                # Scan forward from start_pos + period to find where repeats actually end
-                                scan_end = min(n, start_pos + period * 600)  # Look forward up to 600 periods
-                                pos = start_pos + period
-                                while pos + period <= scan_end:
-                                    window = text_arr[pos:pos + period]
-                                    if window.size == period:
-                                        matches = np.sum(window == motif_arr)
-                                        if matches / period >= 0.75:  # 75% match threshold
-                                            true_end = pos + period
-                                            pos += period
-                                        else:
-                                            break
-                                    else:
-                                        break
-                                
-                                # Recalculate copies based on true boundaries
-                                true_copies = (true_end - true_start) / period
-                                
-                                if true_copies >= self.min_copies:
-                                    # Build consensus from first few copies for efficiency
-                                    max_consensus_copies = min(int(true_copies), 20)
-                                    consensus_arr, mm_rate, max_mm = MotifUtils.build_consensus_motif_array(
-                                        text_arr, true_start, period, max_consensus_copies
-                                    )
-                                    consensus_motif = consensus_arr.tobytes().decode('ascii', errors='replace') if consensus_arr.size > 0 else motif
-                                    
-                                    # Calculate TRF stats directly
-                                    (percent_matches, percent_indels, score, composition,
-                                     entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
-                                        text_arr, true_start, true_end, consensus_motif, int(true_copies), mm_rate
-                                    )
-                                    
-                                    repeat = TandemRepeat(
-                                        chrom=chromosome,
-                                        start=true_start,
-                                        end=true_end,
-                                        motif=motif,
-                                        copies=float(true_copies),
-                                        length=true_end - true_start,
-                                        tier=3,
-                                        confidence=max(0.5, 1.0 - mm_rate),
-                                        consensus_motif=consensus_motif,
-                                        mismatch_rate=mm_rate,
-                                        max_mismatches_per_copy=max_mm,
-                                        n_copies_evaluated=max_consensus_copies,
-                                        strand='+',
-                                        percent_matches=percent_matches,
-                                        percent_indels=percent_indels,
-                                        score=score,
-                                        composition=composition,
-                                        entropy=entropy,
-                                        actual_sequence=actual_sequence[:500] if len(actual_sequence) > 500 else actual_sequence,
-                                        variations=None
-                                    )
-                                else:
-                                    repeat = None
-                            else:
-                                # Use full DP refinement for shorter repeats
-                                # Refine
-                                refined = MotifUtils.refine_repeat(
-                                    self.bwt.text,
-                                    arr_start,
-                                    arr_end,
-                                    motif,
-                                    mismatch_fraction=0.2,
-                                    indel_fraction=0.1,
-                                    min_copies=int(self.min_copies)
-                                )
-                                
-                                if refined:
-                                    repeat = MotifUtils.refined_to_repeat(chromosome, refined, tier=3, text_arr=text_arr)
-                                else:
-                                    repeat = None
-                            
-                            if repeat:
-                                    # Check overlap with existing results
-                                    is_new = True
-                                    for r in repeats:
-                                        if r.start <= repeat.start and r.end >= repeat.end:
-                                            is_new = False
-                                            break
-                                    
-                                    if is_new:
-                                        repeats.append(repeat)
-                                        seen_regions.add(region_key)
-                                        # Actively mask found region to skip future seeds
-                                        mask[repeat.start:repeat.end] = True
+                    consensus_motif = consensus_arr.tobytes().decode('ascii', errors='replace') if consensus_arr.size > 0 else motif
 
-            i += sample_step
+                    (percent_matches, percent_indels, score, composition,
+                     entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
+                        text_arr, true_start, true_end, consensus_motif, int(true_copies), mm_rate
+                    )
+
+                    repeat = TandemRepeat(
+                        chrom=chromosome,
+                        start=true_start,
+                        end=true_end,
+                        motif=motif,
+                        copies=float(true_copies),
+                        length=true_end - true_start,
+                        tier=3,
+                        confidence=max(0.5, 1.0 - mm_rate),
+                        consensus_motif=consensus_motif,
+                        mismatch_rate=mm_rate,
+                        max_mismatches_per_copy=max_mm,
+                        n_copies_evaluated=max_consensus_copies,
+                        strand='+',
+                        percent_matches=percent_matches,
+                        percent_indels=percent_indels,
+                        score=score,
+                        composition=composition,
+                        entropy=entropy,
+                        actual_sequence=actual_sequence[:500] if len(actual_sequence) > 500 else actual_sequence,
+                        variations=None
+                    )
+                else:
+                    repeat = None
+            else:
+                # Use full DP refinement for shorter repeats
+                motif_arr = text_arr[full_start:full_start + period]
+                motif = motif_arr.tobytes().decode('ascii', errors='replace')
+
+                refined = MotifUtils.refine_repeat(
+                    self.bwt.text,
+                    full_start,
+                    full_end,
+                    motif,
+                    mismatch_fraction=0.2,
+                    indel_fraction=0.1,
+                    min_copies=int(self.min_copies)
+                )
+
+                if refined:
+                    repeat = MotifUtils.refined_to_repeat(chromosome, refined, tier=3, text_arr=text_arr)
+                else:
+                    repeat = None
+
+            if repeat:
+                # Check overlap with existing results
+                is_new = True
+                for r in repeats:
+                    if r.start <= repeat.start and r.end >= repeat.end:
+                        is_new = False
+                        break
+
+                if is_new:
+                    repeats.append(repeat)
+                    seen_regions.add(region_key)
+                    mask[repeat.start:min(repeat.end, n)] = True
 
         return repeats
