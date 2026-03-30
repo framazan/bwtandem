@@ -166,10 +166,10 @@ class Tier1STRFinder:
 
         # For very large sequences, the number of locate_positions calls
         # can be expensive — fall back to optimized sliding window.
-        if n > 10_000_000:
-            if self.show_progress:
-                print(f"  [{chromosome}] Large sequence ({n:,} bp) — using sliding window fallback")
-            return self._find_simple_tandems_kmer(chromosome)
+        # if n > 10_000_000:
+        #     if self.show_progress:
+        #         print(f"  [{chromosome}] Large sequence ({n:,} bp) — using sliding window fallback")
+        #     return self._find_simple_tandems_kmer(chromosome)
 
         repeats = []
         sequence_str = text_arr.tobytes().decode('ascii', errors='replace')
