@@ -779,3 +779,97 @@ cpdef tuple align_unit_to_window(
     finally:
         free(dp)
         free(ptr)
+
+cpdef list lcp_tandem_candidates(
+    const int[:] sa,
+    const int[:] lcp,
+    int n,
+    int min_period,
+    int max_period
+):
+    """Scan LCP array for tandem repeat candidate positions.
+
+    A tandem repeat with period p produces neighboring SA entries where:
+    - LCP[i] >= p (the suffixes share a prefix of at least p)
+    - |SA[i] - SA[i-1]| == p (the text positions differ by exactly p)
+
+    Returns list of (period, text_position) tuples.
+    We group results by period externally.
+    """
+    cdef int sa_len = sa.shape[0]
+    cdef list results = []
+    cdef int i, L, pos_a, pos_b, diff, start
+    cdef int lcp_len = lcp.shape[0]
+    cdef int limit = sa_len
+    if lcp_len < limit:
+        limit = lcp_len
+
+    for i in range(1, limit):
+        L = lcp[i]
+        if L < min_period:
+            continue
+
+        pos_a = sa[i - 1]
+        pos_b = sa[i]
+
+        # Skip sentinel positions
+        if pos_a >= n or pos_b >= n:
+            continue
+
+        diff = pos_b - pos_a
+        if diff < 0:
+            diff = -diff
+
+        if diff < min_period or diff > max_period:
+            continue
+
+        # LCP must be >= period for true tandem structure
+        if L < diff:
+            continue
+
+        start = pos_a if pos_a < pos_b else pos_b
+        results.append((diff, start))
+
+    return results
+
+
+cpdef list find_tandem_runs(
+    long[:] positions,
+    int period,
+    int min_copies
+):
+    """Find maximal runs of positions with exact spacing = period.
+
+    Given sorted positions where a motif occurs, find maximal runs
+    of consecutive tandem copies (positions differing by exactly period).
+
+    Returns list of (run_start, run_end) tuples where run_end is
+    the end of the last copy (last_position + period).
+    """
+    cdef int n_pos = positions.shape[0]
+    if n_pos < min_copies:
+        return []
+
+    cdef list results = []
+    cdef long run_start = positions[0]
+    cdef long expected_next = positions[0] + period
+    cdef int count = 1
+    cdef int i
+
+    for i in range(1, n_pos):
+        if positions[i] == expected_next:
+            count += 1
+            expected_next = positions[i] + period
+        else:
+            if count >= min_copies:
+                # run_end = last confirmed position + period
+                results.append((run_start, expected_next))
+            run_start = positions[i]
+            expected_next = positions[i] + period
+            count = 1
+
+    # Flush final run
+    if count >= min_copies:
+        results.append((run_start, expected_next))
+
+    return results
