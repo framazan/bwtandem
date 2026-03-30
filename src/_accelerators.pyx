@@ -785,16 +785,20 @@ cpdef list lcp_tandem_candidates(
     const int[:] lcp,
     int n,
     int min_period,
-    int max_period
+    int max_period,
+    int min_lcp_threshold=10
 ):
     """Scan LCP array for tandem repeat candidate positions.
 
     A tandem repeat with period p produces neighboring SA entries where:
-    - LCP[i] >= p (the suffixes share a prefix of at least p)
-    - |SA[i] - SA[i-1]| == p (the text positions differ by exactly p)
+    - LCP[i] >= min_lcp_threshold (suffixes share enough common prefix)
+    - |SA[i] - SA[i-1]| is in [min_period, max_period] (SA difference = candidate period)
+
+    For perfect repeats, LCP >= period. For imperfect repeats with divergence d,
+    LCP ≈ 1/d (expected position of first mismatch). Using a low threshold
+    (e.g., 10) catches repeats with up to ~10% divergence per copy.
 
     Returns list of (period, text_position) tuples.
-    We group results by period externally.
     """
     cdef int sa_len = sa.shape[0]
     cdef list results = []
@@ -806,7 +810,7 @@ cpdef list lcp_tandem_candidates(
 
     for i in range(1, limit):
         L = lcp[i]
-        if L < min_period:
+        if L < min_lcp_threshold:
             continue
 
         pos_a = sa[i - 1]
@@ -821,10 +825,6 @@ cpdef list lcp_tandem_candidates(
             diff = -diff
 
         if diff < min_period or diff > max_period:
-            continue
-
-        # LCP must be >= period for true tandem structure
-        if L < diff:
             continue
 
         start = pos_a if pos_a < pos_b else pos_b

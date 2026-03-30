@@ -90,9 +90,10 @@ if _native is not None:
         lcp: np.ndarray,
         n: int,
         min_period: int,
-        max_period: int
+        max_period: int,
+        min_lcp_threshold: int = 10
     ) -> list:
-        return _native.lcp_tandem_candidates(sa, lcp, n, min_period, max_period)
+        return _native.lcp_tandem_candidates(sa, lcp, n, min_period, max_period, min_lcp_threshold)
 
     def find_tandem_runs(
         positions: np.ndarray,
@@ -169,7 +170,8 @@ else:
         lcp: np.ndarray,
         n: int,
         min_period: int,
-        max_period: int
+        max_period: int,
+        min_lcp_threshold: int = 10
     ) -> list:
         """Pure-Python fallback for LCP tandem candidate detection."""
         results = []
@@ -178,7 +180,7 @@ else:
         limit = min(sa_len, lcp_len)
         for i in range(1, limit):
             L = int(lcp[i])
-            if L < min_period:
+            if L < min_lcp_threshold:
                 continue
             pos_a = int(sa[i - 1])
             pos_b = int(sa[i])
@@ -186,8 +188,6 @@ else:
                 continue
             diff = abs(pos_b - pos_a)
             if diff < min_period or diff > max_period:
-                continue
-            if L < diff:
                 continue
             start = min(pos_a, pos_b)
             results.append((diff, start))

@@ -149,11 +149,143 @@ class Tier1STRFinder:
         return repeats
 
     def find_strs(self, chromosome: str) -> List[TandemRepeat]:
-        """Find perfect short tandem repeats (1-9bp) using optimized sliding window.
+        """Find short tandem repeats (1-9bp) using FM-index motif enumeration.
 
-        This is Tier 1: fast sliding window with adaptive sampling, perfect match only.
+        Per the plan:
+        1. Enumerate canonical motifs of length k (1..K, K≈9).
+           Skip motifs that are periodic substrings (e.g. ATAT → AT).
+        2. backward_search(motif) → SA interval [sp, ep] for O(k) counting.
+        3. locate_positions() only for motifs with count >= min_copies.
+        4. Sort positions, collapse runs where consecutive hits differ by k.
+        5. Check maximality.
+
+        Falls back to sliding window for very large sequences.
         """
-        return self._find_simple_tandems_kmer(chromosome)
+        text_arr = self.text_arr
+        n = text_arr.size
+
+        # For very large sequences, the number of locate_positions calls
+        # can be expensive — fall back to optimized sliding window.
+        if n > 10_000_000:
+            if self.show_progress:
+                print(f"  [{chromosome}] Large sequence ({n:,} bp) — using sliding window fallback")
+            return self._find_simple_tandems_kmer(chromosome)
+
+        repeats = []
+        sequence_str = text_arr.tobytes().decode('ascii', errors='replace')
+        seen_regions: Set[Tuple[int, int]] = set()
+        seen_mask = np.zeros(n, dtype=bool)
+        alphabet = 'ACGT'
+
+        max_len = min(self.max_motif_length, 9)
+        min_len = max(1, self.min_motif_length)
+        if min_len > max_len:
+            return repeats
+
+        total_queries = 0
+        total_locates = 0
+
+        # Process longest motifs first so we detect [AT]n before [A]n
+        for motif_len in range(max_len, min_len - 1, -1):
+            # Enumerate all motifs of this length over {A,C,G,T}
+            motifs = self._enumerate_canonical_motifs(motif_len, alphabet)
+
+            for motif in motifs:
+                # Step 2: backward_search for O(k) counting
+                total_queries += 1
+                sp, ep = self.bwt.backward_search(motif)
+                if sp == -1:
+                    continue
+
+                occ_count = ep - sp + 1
+                if occ_count < self.min_copies:
+                    continue
+
+                # Cap to avoid exploding on extremely common motifs
+                if occ_count > 50000:
+                    continue
+
+                # Step 3: locate_positions (expensive — only for promising motifs)
+                total_locates += 1
+                positions = self.bwt.locate_positions(motif)
+                if len(positions) < self.min_copies:
+                    continue
+
+                # Step 4-5: Sort positions, collapse runs, check maximality
+                positions_sorted = sorted(positions)
+
+                # Collapse runs where consecutive hits differ by exactly motif_len
+                i = 0
+                while i < len(positions_sorted):
+                    start_pos = positions_sorted[i]
+
+                    # Skip if already in a found region
+                    if start_pos < n and seen_mask[start_pos]:
+                        i += 1
+                        continue
+
+                    copies = 1
+                    current_pos = start_pos
+
+                    j = i + 1
+                    while j < len(positions_sorted):
+                        expected_pos = current_pos + motif_len
+                        if positions_sorted[j] == expected_pos:
+                            copies += 1
+                            current_pos = positions_sorted[j]
+                            j += 1
+                        else:
+                            break
+
+                    if copies >= self.min_copies:
+                        end_pos = start_pos + copies * motif_len
+                        length = end_pos - start_pos
+
+                        if length >= self.min_array_length:
+                            # Step 6: Check maximality
+                            if self._is_maximal_repeat(start_pos, end_pos, motif, motif_len):
+                                # Refine with mismatch tolerance
+                                refined = MotifUtils.refine_repeat(
+                                    sequence_str,
+                                    start_pos,
+                                    end_pos,
+                                    motif,
+                                    mismatch_fraction=self.allowed_mismatch_rate,
+                                    indel_fraction=self.allowed_indel_rate,
+                                    min_copies=self.min_copies
+                                )
+
+                                if refined:
+                                    repeat = self._build_repeat(chromosome, refined, tier=1)
+                                    repeats.append(repeat)
+                                    seen_regions.add((refined.start, refined.end))
+                                    seen_mask[refined.start:refined.end] = True
+
+                    i = j if j > i + 1 else i + 1
+
+        if self.show_progress:
+            print(f"  [{chromosome}] Tier 1 FM-index: {total_queries} backward_search queries, "
+                  f"{total_locates} locate_positions calls, {len(repeats)} repeats found")
+
+        return repeats
+
+    @staticmethod
+    def _enumerate_canonical_motifs(k: int, alphabet: str = 'ACGT') -> List[str]:
+        """Enumerate canonical motifs of length k, skipping periodic ones.
+
+        A motif is periodic if it has a primitive period p < k that divides k
+        (e.g., ATAT has primitive period 2, so it's skipped for k=4).
+        """
+        from itertools import product
+        motifs = []
+        for chars in product(alphabet, repeat=k):
+            motif = ''.join(chars)
+            # Check if motif is periodic (reducible to shorter primitive period)
+            primitive = MotifUtils.smallest_period_str(motif)
+            if primitive < k:
+                continue  # Skip: this motif will be found at length = primitive
+            motifs.append(motif)
+        return motifs
 
     def _find_tandems_with_mismatches(self, positions: List[int], motif: str,
                                      chromosome: str, motif_len: int,
