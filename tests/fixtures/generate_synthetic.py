@@ -156,8 +156,8 @@ def make_seq2():
 
     pos = add_bg(parts, pos, 10000)
 
-    # Repeat 1: 12bp motif x8, perfect
-    pos = add_repeat(parts, truth, pos, name, "ACGTACGTACGT", 8, 2)
+    # Repeat 1: 12bp primitive motif x8, perfect (no sub-period)
+    pos = add_repeat(parts, truth, pos, name, "ACGTTAGCCTGA", 8, 2)
     pos = add_bg(parts, pos, 12000)
 
     # Repeat 2: 12bp motif x10, 5% mismatch
