@@ -151,71 +151,71 @@ def bwt_kmer_seed_scan(
             pos_arr, min_period, max_period, min_copies, tolerance_ratio
         )  # Returns: [(run_start, run_end, period), ...] -- list of periodic k-mer occurrence runs
 
-        for run_start, run_end, period in patterns:  # 각 주기적 런에 대해 처리
-            run_start = int(run_start)  # numpy 타입을 파이썬 int로 변환
-            run_end = int(run_end)      # numpy 타입을 파이썬 int로 변환
-            period = int(period)        # numpy 타입을 파이썬 int로 변환
+        for run_start, run_end, period in patterns:  # Process each periodic run
+            run_start = int(run_start)  # Convert numpy type to Python int
+            run_end = int(run_end)      # Convert numpy type to Python int
+            period = int(period)        # Convert numpy type to Python int
 
-            # 동일한 영역의 중복 후보 제거: 시작 위치와 주기의 조합으로 키 생성
-            region_key = (run_start // max(period, 1), period)  # 반복 구간 식별 키
-            if region_key in seen_regions:  # 이미 처리된 영역이면 건너뜀
+            # Remove duplicate candidates for the same region: generate key from start position and period
+            region_key = (run_start // max(period, 1), period)  # Key to identify the repeat region
+            if region_key in seen_regions:  # Skip if this region was already processed
                 continue
 
-            # 이미 커버된 영역과 50% 이상 겹치는 경우 스킵 (중복 탐지 방지)
+            # Skip if overlap with already covered region exceeds 50% (prevent redundant detection)
             if covered_mask is not None:
                 covered_count = int(np.sum(
                     covered_mask[run_start:min(run_end + period, n)]
-                ))  # 해당 구간 내 이미 커버된 위치 수 계산
-                span = run_end + period - run_start  # 런의 전체 길이 계산 (마지막 k-mer 포함)
+                ))  # Count already covered positions within this span
+                span = run_end + period - run_start  # Total length of the run (including last k-mer)
                 if span > 0 and covered_count > span * 0.5:
-                    continue  # 50% 초과 커버 시 건너뜀
+                    continue  # Skip if more than 50% is already covered
 
-            # --- 미스매치 허용 확장: 반복 배열의 실제 경계를 양방향으로 확장 ---
+            # --- Mismatch-tolerant extension: extend the actual boundaries of the repeat array in both directions ---
             res = extend_with_mismatches(
                 text_arr, run_start, period, n, allowed_mismatch_rate
-            )  # 반환: (arr_start, arr_end, copies, full_start, full_end) 또는 None
+            )  # Returns: (arr_start, arr_end, copies, full_start, full_end) or None
 
             if res is not None:
                 arr_start, arr_end, copies, full_start, full_end = res
-                # arr_start/arr_end: 정렬 기준 경계, full_start/full_end: 실제 확장된 경계
+                # arr_start/arr_end: alignment-based boundaries, full_start/full_end: actual extended boundaries
             else:
-                # 확장 실패 시 폴백: k-mer 런의 원시 경계 사용
+                # Fallback when extension fails: use raw boundaries of the k-mer run
                 full_start = run_start
-                # run_end는 마지막 k-mer의 시작 위치이므로 period를 더해 끝 위치 계산
+                # run_end is the start position of the last k-mer, so add period to get end position
                 full_end = run_end + period
-                copies = max(1, (full_end - full_start) // period)  # 복사 수 추정
+                copies = max(1, (full_end - full_start) // period)  # Estimate copy count
 
-            if copies < min_copies:  # 최소 복사 수 미달이면 후보로 등록하지 않음
+            if copies < min_copies:  # Do not register as candidate if below minimum copy count
                 continue
 
-            # 확인된 반복 영역에서 모티프 문자열 추출
-            motif_start = max(0, full_start)  # 음수 인덱스 방지를 위한 클램프
-            motif_arr = text_arr[motif_start:motif_start + period]  # 한 복사에 해당하는 서열 슬라이스
-            motif_str = motif_arr.tobytes().decode('ascii', errors='replace')  # 바이트 배열을 문자열로 변환
+            # Extract motif string from the confirmed repeat region
+            motif_start = max(0, full_start)  # Clamp to prevent negative index
+            motif_arr = text_arr[motif_start:motif_start + period]  # Sequence slice for one copy
+            motif_str = motif_arr.tobytes().decode('ascii', errors='replace')  # Convert byte array to string
 
-            # SeedCandidate 객체 생성 및 후보 목록에 추가
+            # Create SeedCandidate object and add to candidate list
             candidates.append(SeedCandidate(
-                start=full_start,   # 확장된 반복 배열 시작 위치
-                end=full_end,       # 확장된 반복 배열 끝 위치
-                period=period,      # 탐지된 반복 단위 길이
-                copies=copies,      # 탐지된 복사 수
-                motif=motif_str,    # 대표 모티프 문자열
-                seed_pos=i,         # 이 후보를 생성한 원본 시드 위치
+                start=full_start,   # Extended repeat array start position
+                end=full_end,       # Extended repeat array end position
+                period=period,      # Detected repeat unit length
+                copies=copies,      # Detected copy count
+                motif=motif_str,    # Representative motif string
+                seed_pos=i,         # Original seed position that generated this candidate
             ))
-            seen_regions.add(region_key)  # 해당 영역을 처리 완료로 등록
+            seen_regions.add(region_key)  # Mark this region as processed
 
-            # 발견된 영역을 마스크에 표시: 이후 같은 구간에서 재시딩하지 않도록 함
+            # Mark discovered region in the mask: prevent re-seeding in the same span later
             if covered_mask is not None:
-                covered_mask[full_start:min(full_end, n)] = True  # 해당 구간을 커버됨으로 표시
+                covered_mask[full_start:min(full_end, n)] = True  # Mark this span as covered
 
-        i += stride  # 다음 샘플 위치로 이동
+        i += stride  # Move to next sample position
 
-    # 진행 상황 출력 (show_progress가 True일 때만)
+    # Print progress (only when show_progress is True)
     if show_progress:
         print(
             f"  [{label}] BWT k-mer seeding: {len(candidates)} candidates from "
             f"{bwt_queries} FM-index queries (kmer={effective_kmer}, stride={stride})",
             flush=True,
-        )  # 후보 수, FM-인덱스 조회 횟수, 실효 k-mer 크기, 샘플링 간격 출력
+        )  # Print candidate count, FM-index query count, effective k-mer size, and sampling stride
 
-    return candidates  # 탐지된 모든 원시 반복 후보 목록 반환
+    return candidates  # Return list of all detected raw repeat candidates

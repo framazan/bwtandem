@@ -227,19 +227,19 @@ def main():
                 info = f"END={r.end};{r.to_vcf_info()}"  # Combine END position with VCF INFO field
                 f.write(f"{r.chrom}\t{r.start+1}\t.\t{ref}\t{alt}\t.\t.\t{info}\n")  # Write VCF record in 1-based coordinates
     elif args.format == "trf":
-        out_file = _resolve_output_file(output_prefix, "dat")  # TRF .dat 형식 출력 파일 경로 결정
+        out_file = _resolve_output_file(output_prefix, "dat")  # Determine output file path for TRF .dat format
         with open(out_file, "w") as f:
             for r in all_repeats:
-                f.write(r.to_trf_dat() + "\n")  # 각 반복 서열을 TRF .dat 형식으로 파일에 기록
+                f.write(r.to_trf_dat() + "\n")  # Write each repeat to file in TRF .dat format
     elif args.format == "strfinder":
-        out_file = _resolve_output_file(output_prefix, "csv")  # STRfinder CSV 형식 출력 파일 경로 결정
+        out_file = _resolve_output_file(output_prefix, "csv")  # Determine output file path for STRfinder CSV format
         with open(out_file, "w") as f:
-            # STRfinder CSV 헤더 기록
+            # Write STRfinder CSV header
             f.write("STR_marker,STR_position,STR_motif,STR_genotype_structure,STR_genotype,STR_core_seq,Allele_coverage,Alleles_ratio,Reads_Distribution,STR_depth,Full_seq,Variations\n")
             for r in all_repeats:
-                f.write(r.to_strfinder() + "\n")  # 각 반복 서열을 STRfinder 형식으로 파일에 기록
+                f.write(r.to_strfinder() + "\n")  # Write each repeat to file in STRfinder format
 
-    print(f"Results written to {out_file}")  # 결과 파일 저장 경로 출력
+    print(f"Results written to {out_file}")  # Print the output file path
 
 if __name__ == "__main__":
-    main()  # 스크립트 직접 실행 시 main 함수 호출
+    main()  # Call main function when script is executed directly
