@@ -113,8 +113,7 @@ class BWTCore:
 
         self.text_arr = np.frombuffer(text.encode('utf-8'), dtype=np.uint8)
 
-        # Defer k-mer hash build (only needed for get_kmer_positions, rarely used)
-        self.kmer_hash = {}
+        self._build_kmer_hash()
 
         # Build suffix array and BWT (memory-efficient)
         self.suffix_array = self._build_suffix_array()
