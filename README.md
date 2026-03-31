@@ -589,10 +589,10 @@ Comparison on 5 synthetic test sequences containing 44 planted repeats with know
 
 | Tool | Sensitivity | Precision | F1 |
 |------|-------------|-----------|-----|
-| **bwtandem** | **100.0%** | 97.8% | 98.9% |
-| TRF | 97.7% | **100.0%** | 98.9% |
+| **bwtandem** | **100.0%** | **100.0%** | **100.0%** |
+| TRF | 97.7% | 100.0% | 98.9% |
 
-bwtandem detected all 44 repeats including all 11 adjacent/edge-case repeats (TRF missed 1).
+bwtandem detected all 44 repeats with zero false positives, including all 11 adjacent/edge-case repeats (TRF missed 1).
 
 ### Arabidopsis Chr4 (18.5 Mbp)
 
@@ -615,10 +615,25 @@ bwtandem detected all 44 repeats including all 11 adjacent/edge-case repeats (TR
 
 #### Key Observations
 
-- **bwtandem** achieves the highest sensitivity (100% on synthetic data) and detects 45% more repeats than TRF on Chr4
+- **bwtandem** achieves the highest sensitivity and precision (100%/100% on synthetic data) and detects 45% more repeats than TRF on Chr4
 - **TRF** is the fastest tool (34 sec) with high precision
 - **mreps** reports 84K results (heavy over-detection, filtering required)
 - **ULTRA** is the slowest (24 min) with 3.5x more results than bwtandem
+
+### Tool Overlap (Chr4 Venn Diagram)
+
+Region overlap analysis using 500bp genomic bins on Arabidopsis Chr4:
+
+![Venn Diagram Comparison](results/venn_comparison_chr4.png)
+
+| Comparison | Shared Bins | bwtandem-only | Other-only |
+|-----------|-------------|---------------|------------|
+| bwtandem vs TRF | 2,990 | 4,074 | 879 |
+| bwtandem vs ULTRA | 6,062 | 1,002 | 11,104 |
+| bwtandem vs mreps | 4,031 | 3,033 | 11,692 |
+| All 4 tools | 1,938 | — | — |
+
+bwtandem shares 77% of TRF's detected regions while finding 4,074 additional regions that TRF misses. ULTRA and mreps each detect many regions not found by other tools, likely due to different sensitivity/specificity trade-offs.
 
 ---
 
