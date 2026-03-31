@@ -1,12 +1,12 @@
-import argparse  # 명령줄 인수 파싱을 위한 표준 라이브러리
-import sys  # 시스템 종료(sys.exit) 및 표준 출력을 위한 라이브러리
-import time  # 실행 시간 측정을 위한 표준 라이브러리
-import os  # 파일 경로 처리 및 존재 여부 확인을 위한 라이브러리
-import re  # 정규표현식을 위한 표준 라이브러리
-from typing import List, Iterator, Tuple  # 타입 힌트를 위한 typing 모듈
-from concurrent.futures import ProcessPoolExecutor, as_completed  # 멀티프로세싱을 위한 모듈
-from .finder import TandemRepeatFinder  # 멀티 티어 반복 서열 탐색 조율자
-from .models import TandemRepeat  # 반복 서열 데이터 클래스 및 출력 포맷터
+import argparse  # Standard library for command-line argument parsing
+import sys  # Standard library for sys.exit and standard output
+import time  # Standard library for measuring execution time
+import os  # Standard library for file path handling and existence checks
+import re  # Standard library for regular expressions
+from typing import List, Iterator, Tuple  # Type hints from the typing module
+from concurrent.futures import ProcessPoolExecutor, as_completed  # Module for multiprocessing
+from .finder import TandemRepeatFinder  # Multi-tier tandem repeat finding coordinator
+from .models import TandemRepeat  # Tandem repeat data class and output formatters
 
 
 def apply_mask(seq: str, mask_mode: str) -> str:
@@ -33,7 +33,7 @@ def apply_mask(seq: str, mask_mode: str) -> str:
             if mask_mode in ("hard", "both"):
                 result.append('N')
             else:
-                result.append('N')  # N은 항상 N으로 유지
+                result.append('N')  # N is always kept as N
         else:
             result.append(ch.upper())
     return ''.join(result)
@@ -61,87 +61,87 @@ def _process_chromosome(chrom: str, seq: str, min_period: int, max_period: int,
 
 def _resolve_output_file(output_prefix: str, extension: str) -> str:
     """Return output path while avoiding duplicated extensions."""
-    ext = extension if extension.startswith(".") else f".{extension}"  # 확장자 앞에 점이 없으면 추가
+    ext = extension if extension.startswith(".") else f".{extension}"  # Prepend dot if extension lacks one
     if output_prefix.lower().endswith(ext.lower()):
-        return output_prefix  # 이미 확장자가 포함된 경우 그대로 반환
-    return f"{output_prefix}{ext}"  # 확장자를 접두사에 붙여 최종 파일 경로 반환
+        return output_prefix  # Already includes the extension, return as-is
+    return f"{output_prefix}{ext}"  # Append extension to prefix to form final file path
 
 def parse_fasta(file_path: str) -> Iterator[Tuple[str, str]]:
     """Simple FASTA parser to avoid Biopython dependency."""
-    name = None  # 현재 파싱 중인 시퀀스 이름 초기화
-    seq_parts = []  # 현재 시퀀스의 라인별 조각을 모을 리스트
+    name = None  # Initialize current sequence name
+    seq_parts = []  # List to accumulate per-line fragments of the current sequence
     with open(file_path, 'r') as f:
         for line in f:
-            line = line.strip()  # 앞뒤 공백 및 개행 문자 제거
+            line = line.strip()  # Remove leading/trailing whitespace and newline characters
             if not line:
-                continue  # 빈 줄은 건너뜀
+                continue  # Skip empty lines
             if line.startswith('>'):
-                # '>' 로 시작하는 헤더 라인 처리
+                # Process header line starting with '>'
                 if name:
-                    yield name, "".join(seq_parts)  # 이전 시퀀스를 완성하여 반환
-                name = line[1:].split()[0]  # Take first word as ID  # '>'를 제거하고 첫 단어만 ID로 사용
-                seq_parts = []  # 새 시퀀스의 조각 리스트 초기화
+                    yield name, "".join(seq_parts)  # Yield the completed previous sequence
+                name = line[1:].split()[0]  # Take first word as ID
+                seq_parts = []  # Initialize fragment list for the new sequence
             else:
-                seq_parts.append(line)  # 서열 라인을 조각 리스트에 추가
+                seq_parts.append(line)  # Append sequence line to fragment list
         if name:
-            yield name, "".join(seq_parts)  # 파일 마지막 시퀀스 반환
+            yield name, "".join(seq_parts)  # Yield the last sequence in the file
 
 def main():
-    parser = argparse.ArgumentParser(description="BWT-based Tandem Repeat Finder")  # CLI 파서 생성
-    parser.add_argument("fasta_file", help="Input FASTA file")  # 입력 FASTA 파일 경로 인수
-    parser.add_argument("--min-period", type=int, default=1, help="Minimum period size (default: 1)")  # 최소 주기 길이 옵션
-    parser.add_argument("--max-period", type=int, default=2000, help="Maximum period size (default: 2000)")  # 최대 주기 길이 옵션
+    parser = argparse.ArgumentParser(description="BWT-based Tandem Repeat Finder")  # Create CLI parser
+    parser.add_argument("fasta_file", help="Input FASTA file")  # Input FASTA file path argument
+    parser.add_argument("--min-period", type=int, default=1, help="Minimum period size (default: 1)")  # Minimum period length option
+    parser.add_argument("--max-period", type=int, default=2000, help="Maximum period size (default: 2000)")  # Maximum period length option
     parser.add_argument("--min-array-bp", type=int, default=None,
-                        help="Minimum repeat array length in bp (default: no minimum)")  # 반복 배열 최소 길이 옵션
+                        help="Minimum repeat array length in bp (default: no minimum)")  # Minimum repeat array length option
     parser.add_argument("--max-array-bp", type=int, default=None,
-                        help="Maximum repeat array length in bp (default: no maximum)")  # 반복 배열 최대 길이 옵션
+                        help="Maximum repeat array length in bp (default: no maximum)")  # Maximum repeat array length option
     parser.add_argument("--tiers", type=str, default="tier1,tier2,tier3",
-                        help="Comma-separated list of tiers to run (tier1,tier2,tier3) or 'all'")  # 실행할 티어 목록 옵션
-    parser.add_argument("--output", "-o", help="Output file prefix (default: input filename)")  # 출력 파일 접두사 옵션
-    parser.add_argument("--format", choices=["bed", "vcf", "trf", "strfinder"], default="bed", help="Output format")  # 출력 형식 선택 옵션
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")  # 상세 출력 모드 플래그
-    parser.add_argument("--profile", action="store_true", help="Profile execution with cProfile and print top hotspots")  # 성능 프로파일링 플래그
+                        help="Comma-separated list of tiers to run (tier1,tier2,tier3) or 'all'")  # Tiers to run option
+    parser.add_argument("--output", "-o", help="Output file prefix (default: input filename)")  # Output file prefix option
+    parser.add_argument("--format", choices=["bed", "vcf", "trf", "strfinder"], default="bed", help="Output format")  # Output format selection option
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")  # Verbose output flag
+    parser.add_argument("--profile", action="store_true", help="Profile execution with cProfile and print top hotspots")  # Performance profiling flag
     parser.add_argument("--tier3-mode", choices=["fast", "balanced", "sensitive"],
-                        default="balanced", help="Tier 3 speed/accuracy preset (default: balanced)")  # Tier 3 속도/정확도 사전 설정 옵션
+                        default="balanced", help="Tier 3 speed/accuracy preset (default: balanced)")  # Tier 3 speed/accuracy preset option
     parser.add_argument("--threads", "-t", type=int, default=1,
-                        help="Number of threads for parallel chromosome processing (default: 1)")  # 병렬 처리 스레드 수 옵션
+                        help="Number of threads for parallel chromosome processing (default: 1)")  # Parallel processing thread count option
     parser.add_argument("--mask", choices=["none", "soft", "hard", "both"], default="none",
                         help="Masking mode: none=ignore masks, soft=skip lowercase regions, "
-                             "hard=skip N regions, both=skip both (default: none)")  # 마스킹 모드 옵션
+                             "hard=skip N regions, both=skip both (default: none)")  # Masking mode option
 
-    args = parser.parse_args()  # 명령줄 인수 파싱 실행
+    args = parser.parse_args()  # Parse command-line arguments
 
     if not os.path.exists(args.fasta_file):
-        # 입력 파일이 존재하지 않으면 오류 메시지 출력 후 종료
+        # Print error message and exit if input file does not exist
         print(f"Error: File {args.fasta_file} not found")
         sys.exit(1)
 
-    output_prefix = args.output if args.output else os.path.splitext(args.fasta_file)[0]  # 출력 접두사: 지정 없으면 입력 파일명 (확장자 제외)
-    out_file = _resolve_output_file(output_prefix, args.format)  # 최종 출력 파일 경로 결정
+    output_prefix = args.output if args.output else os.path.splitext(args.fasta_file)[0]  # Output prefix: use input filename (without extension) if not specified
+    out_file = _resolve_output_file(output_prefix, args.format)  # Determine final output file path
 
-    print(f"Processing {args.fasta_file}...")  # 처리 시작 알림
-    start_total = time.time()  # 전체 처리 시작 시각 기록
+    print(f"Processing {args.fasta_file}...")  # Notify processing start
+    start_total = time.time()  # Record overall processing start time
 
-    all_repeats: List[TandemRepeat] = []  # 모든 염색체의 반복 서열 결과를 모을 리스트
+    all_repeats: List[TandemRepeat] = []  # List to collect repeat results from all chromosomes
 
-    tiers_arg = args.tiers.strip()  # 티어 인수 앞뒤 공백 제거
+    tiers_arg = args.tiers.strip()  # Strip whitespace from tiers argument
     if tiers_arg.lower() == "all":
-        enabled_tiers = {"tier1", "tier2", "tier3"}  # "all"이면 모든 티어 활성화
+        enabled_tiers = {"tier1", "tier2", "tier3"}  # Enable all tiers if "all"
     else:
-        # 콤마로 구분된 티어 이름을 소문자로 정규화하여 집합 생성
+        # Normalize comma-separated tier names to lowercase and create a set
         enabled_tiers = {t.strip().lower() for t in tiers_arg.split(',') if t.strip()}
 
     # Optional profiler
-    profiler = None  # 프로파일러 초기화 (기본값 None)
+    profiler = None  # Initialize profiler (default None)
     if args.profile:
-        import cProfile  # 성능 프로파일링을 위한 cProfile 동적 임포트
-        profiler = cProfile.Profile()  # 프로파일러 인스턴스 생성
-        profiler.enable()  # 프로파일링 시작
+        import cProfile  # Dynamic import of cProfile for performance profiling
+        profiler = cProfile.Profile()  # Create profiler instance
+        profiler.enable()  # Start profiling
 
-    # 입력 서열 로드 및 마스킹 적용
+    # Load input sequences and apply masking
     sequences = []
     for chrom, seq in parse_fasta(args.fasta_file):
-        seq = apply_mask(seq, args.mask)  # 마스킹 모드에 따라 서열 처리
+        seq = apply_mask(seq, args.mask)  # Apply masking based on the selected mode
         if args.verbose:
             n_count = seq.count('N')
             masked_pct = n_count / len(seq) * 100 if len(seq) > 0 else 0
@@ -152,7 +152,7 @@ def main():
     n_threads = max(1, args.threads)
 
     if n_threads == 1 or len(sequences) == 1:
-        # 단일 스레드 모드: 순차 처리
+        # Single-thread mode: sequential processing
         for chrom, seq in sequences:
             repeats = _process_chromosome(
                 chrom, seq, args.min_period, args.max_period,
@@ -161,7 +161,7 @@ def main():
             )
             all_repeats.extend(repeats)
     else:
-        # 멀티 스레드 모드: 염색체별 병렬 처리
+        # Multi-thread mode: parallel processing per chromosome
         if args.verbose:
             print(f"Using {n_threads} parallel processes for {len(sequences)} sequences")
         with ProcessPoolExecutor(max_workers=n_threads) as executor:
@@ -187,45 +187,45 @@ def main():
 
     # Stop profiler and report
     if profiler is not None:
-        profiler.disable()  # 프로파일링 종료
+        profiler.disable()  # Stop profiling
 
-    print(f"Total repeats found: {len(all_repeats)}")  # 발견된 총 반복 서열 수 출력
-    print(f"Total time: {time.time() - start_total:.2f}s")  # 전체 처리 시간 출력
+    print(f"Total repeats found: {len(all_repeats)}")  # Print total number of repeats found
+    print(f"Total time: {time.time() - start_total:.2f}s")  # Print total processing time
 
     if profiler is not None:
-        import pstats  # 프로파일 통계 출력을 위한 pstats 동적 임포트
-        profile_path = f"{output_prefix}.tier2_profile.prof"  # 프로파일 결과 파일 경로
-        profiler.dump_stats(profile_path)  # 프로파일 데이터를 파일에 저장
-        print(f"Profile written to {profile_path}")  # 저장 경로 출력
-        print("Top 20 cumulative time hotspots:")  # 누적 시간 기준 상위 20개 핫스팟 안내
-        stats = pstats.Stats(profiler)  # 프로파일 통계 객체 생성
-        stats.strip_dirs().sort_stats("cumulative").print_stats(20)  # 디렉터리 제거 후 누적 시간 정렬하여 상위 20개 출력
+        import pstats  # Dynamic import of pstats for profile statistics output
+        profile_path = f"{output_prefix}.tier2_profile.prof"  # Profile result file path
+        profiler.dump_stats(profile_path)  # Save profile data to file
+        print(f"Profile written to {profile_path}")  # Print save path
+        print("Top 20 cumulative time hotspots:")  # Heading for top 20 cumulative time hotspots
+        stats = pstats.Stats(profiler)  # Create profile statistics object
+        stats.strip_dirs().sort_stats("cumulative").print_stats(20)  # Strip directories, sort by cumulative time, print top 20
 
     # Write output
     if args.format == "bed":
-        out_file = _resolve_output_file(output_prefix, "bed")  # BED 형식 출력 파일 경로 결정
+        out_file = _resolve_output_file(output_prefix, "bed")  # Determine BED format output file path
         with open(out_file, "w") as f:
             for r in all_repeats:
-                f.write(r.to_bed() + "\n")  # 각 반복 서열을 BED 형식으로 파일에 기록
+                f.write(r.to_bed() + "\n")  # Write each repeat in BED format
     elif args.format == "vcf":
-        out_file = _resolve_output_file(output_prefix, "vcf")  # VCF 형식 출력 파일 경로 결정
+        out_file = _resolve_output_file(output_prefix, "vcf")  # Determine VCF format output file path
         with open(out_file, "w") as f:
-            f.write("##fileformat=VCFv4.2\n")  # VCF 파일 형식 헤더 기록
-            f.write("##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the repeat\">\n")  # INFO 필드 정의 헤더
-            f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")  # VCF 열 헤더 기록
+            f.write("##fileformat=VCFv4.2\n")  # Write VCF file format header
+            f.write("##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the repeat\">\n")  # INFO field definition header
+            f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")  # Write VCF column header
             for r in all_repeats:
                 # Use a single anchor base for REF to keep symbolic-ALT records valid.
-                # 심볼릭 ALT 레코드 유효성을 위해 REF에 단일 앵커 염기 사용
-                ref = "N"  # 기본 REF 값 (서열 정보 없을 경우)
+                # Use a single anchor base for REF to keep symbolic-ALT records valid
+                ref = "N"  # Default REF value (when no sequence info available)
                 if r.actual_sequence:
-                    ref = r.actual_sequence[0]  # 실제 서열의 첫 번째 염기를 REF로 사용
+                    ref = r.actual_sequence[0]  # Use first base of actual sequence as REF
                 elif r.consensus_motif:
-                    ref = r.consensus_motif[0]  # 컨센서스 모티프의 첫 염기를 REF로 사용
+                    ref = r.consensus_motif[0]  # Use first base of consensus motif as REF
                 elif r.motif:
-                    ref = r.motif[0]  # 모티프의 첫 염기를 REF로 사용
-                alt = "<STR>"  # 반복 서열을 나타내는 심볼릭 ALT 값
-                info = f"END={r.end};{r.to_vcf_info()}"  # END 위치와 VCF INFO 필드 조합
-                f.write(f"{r.chrom}\t{r.start+1}\t.\t{ref}\t{alt}\t.\t.\t{info}\n")  # 1-based 좌표로 VCF 레코드 기록
+                    ref = r.motif[0]  # Use first base of motif as REF
+                alt = "<STR>"  # Symbolic ALT value representing a tandem repeat
+                info = f"END={r.end};{r.to_vcf_info()}"  # Combine END position with VCF INFO field
+                f.write(f"{r.chrom}\t{r.start+1}\t.\t{ref}\t{alt}\t.\t.\t{info}\n")  # Write VCF record in 1-based coordinates
     elif args.format == "trf":
         out_file = _resolve_output_file(output_prefix, "dat")  # TRF .dat 형식 출력 파일 경로 결정
         with open(out_file, "w") as f:

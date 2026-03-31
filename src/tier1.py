@@ -1,18 +1,27 @@
 import numpy as np
+import ctypes
 import time
 from typing import List
-from itertools import product
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
 from .accelerators import extend_with_mismatches
 
-class Tier1STRFinder:
-    """Tier 1: Short Tandem Repeat Finder (1-9bp) using FM-Index with mismatch extension.
+# Try to load C extension for fast run detection
+_c_lib = None
+try:
+    from .c_extensions.build import load as _load_c_lib
+    _c_lib = _load_c_lib()
+except Exception:
+    pass
 
-    Uses FM-index backward search to find exact motif occurrences, collapses
-    adjacent hits into perfect seeds, then extends seeds with mismatch tolerance
-    to capture imperfect repeats.
+
+class Tier1STRFinder:
+    """Tier 1: Short Tandem Repeat Finder (1-9bp) using sliding window scan.
+
+    Directly scans the sequence for consecutive period-k repeats using
+    character comparison, then extends seeds with mismatch tolerance.
+    Much faster than FM-index enumeration of all possible k-mers.
     """
 
     def __init__(self, text_arr: np.ndarray, bwt_core: BWTCore, max_motif_length: int = 9,
@@ -24,7 +33,6 @@ class Tier1STRFinder:
         self.max_motif_length = max(1, max_motif_length)
         self.min_motif_length = max(1, min(min_motif_length, self.max_motif_length))
         self.min_copies = 3
-        # Baseline constraint: require at least 26bp to reduce FP from random background
         self.min_array_length = 26
         self.min_entropy = 1.0
         self.allowed_mismatch_rate = max(0.0, allowed_mismatch_rate)
@@ -34,137 +42,138 @@ class Tier1STRFinder:
     def _build_repeat(self, chromosome: str, refined, tier: int = 1) -> TandemRepeat:
         return MotifUtils.refined_to_repeat(chromosome, refined, tier, self.text_arr, strand='+')
 
-    def _enumerate_canonical_motifs(self, k: int, alphabet: str = 'ACGT') -> List[str]:
-        """Generate all purely primitive motifs of length k."""
-        motifs = []
-        for chars in product(alphabet, repeat=k):
-            motif = ''.join(chars)
-            # Skip non-primitive motifs (e.g., ATAT should be found during k=2, not k=4)
-            if MotifUtils.smallest_period_str(motif) < k:
-                continue
-            motifs.append(motif)
-        return motifs
-
     def find_strs(self, chromosome: str) -> List[TandemRepeat]:
         t0 = time.time()
         text_arr = self.text_arr
         n = text_arr.size
         sequence_str = text_arr.tobytes().decode('ascii', errors='replace')
         repeats = []
-        
+
         max_len = min(self.max_motif_length, 9)
         min_len = max(1, self.min_motif_length)
         if min_len > max_len:
             return repeats
 
         if self.show_progress:
-            print(f"  [{chromosome}] Tier 1 pure FM-index scan (min_k={min_len}, max_k={max_len})...", flush=True)
+            print(f"  [{chromosome}] Tier 1 sliding window scan (k={min_len}-{max_len})...", flush=True)
 
         seen_mask = np.zeros(n, dtype=bool)
 
-        # Iterate longest -> shortest so dominant macro-repeats claim space first
+        # Process longest motifs first so they claim space before shorter ones
         for motif_len in range(max_len, min_len - 1, -1):
-            if self.show_progress:
-                print(f"    Evaluating all 4^{motif_len} canonical {motif_len}-mers...", flush=True)
-                
-            motifs = self._enumerate_canonical_motifs(motif_len)
-            
-            # Dynamic min copies: shorter motifs need more copies to be significant
-            # 1bp→15, 2bp→8, 3bp→6, 4bp→5, 5bp→4, 6-9bp→3
+            # Dynamic min copies: shorter motifs need more copies
             dynamic_min_copies = max(self.min_copies, 12 // motif_len + 3)
             required_threshold = max(self.min_array_length, motif_len * dynamic_min_copies)
+            min_run = required_threshold // motif_len  # minimum consecutive matching positions
 
-            for motif in motifs:
-                sp, ep = self.bwt.backward_search(motif)
-                if sp == -1:
-                    continue
-                
-                occ_count = ep - sp + 1
-                
-                # Math check: The motif MUST exist at least roughly enough times to form 1 single array
-                if occ_count < max(self.min_copies, required_threshold // motif_len):
-                    continue
+            seed_min_copies = 2
+            max_candidates = n // motif_len + 1
 
-                # Locate all occurrences globally (O(1) given sa_sample_rate=1)
-                positions = self.bwt.locate_positions(motif)
-                if not positions:
-                    continue
-                
-                # Sort coordinates sequentially
-                positions.sort()
-                
-                # Collapse continuous sequences
+            # Use C extension for fast run detection if available
+            if _c_lib is not None:
+                text_ptr = text_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+                seen_ptr = seen_mask.view(np.uint8).ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+                out_starts = (ctypes.c_int * max_candidates)()
+                out_ends = (ctypes.c_int * max_candidates)()
+                out_copies = (ctypes.c_int * max_candidates)()
+                n_found = _c_lib.find_period_runs(
+                    text_ptr, n, motif_len, seed_min_copies,
+                    seen_ptr, out_starts, out_ends, out_copies, max_candidates
+                )
+                candidates = [(out_starts[ci], out_ends[ci], out_copies[ci])
+                              for ci in range(n_found)]
+            else:
+                # Pure Python fallback
+                match_arr = (text_arr[:n - motif_len] == text_arr[motif_len:n])
+                candidates = []
                 i = 0
-                count_pos = len(positions)
-                
-                while i < count_pos:
-                    start_pos = positions[i]
-                    copies = 1
-                    current_pos = start_pos
-                    
+                limit = n - motif_len
+                while i < limit:
+                    if not match_arr[i]:
+                        i += 1
+                        continue
+                    run_start = i
                     j = i + 1
-                    while j < count_pos and positions[j] == current_pos + motif_len:
-                        copies += 1
-                        current_pos = positions[j]
+                    while j < limit and match_arr[j]:
                         j += 1
-                        
-                    perfect_length = copies * motif_len
-                    length = perfect_length
-
-                    # Extend with mismatch tolerance if perfect seed
-                    # has sufficient copies. For short motifs (1-3bp),
-                    # require more copies to avoid phase-shift issues.
-                    ext_start = start_pos
-                    ext_end = start_pos + length
-                    min_copies_for_ext = 5 if motif_len <= 3 else 2
-                    if copies >= min_copies_for_ext:
-                        ext_res = extend_with_mismatches(
-                            text_arr, start_pos, motif_len, n,
-                            self.allowed_mismatch_rate
-                        )
-                        if ext_res is not None:
-                            arr_s, arr_e, ext_copies, full_s, full_e = ext_res
-                            if full_e - full_s > length:
-                                ext_start = full_s
-                                ext_end = full_e
-                                length = ext_end - ext_start
-                                copies = ext_copies
-
-                    # If this run satisfies the threshold, lock it in
-                    if length >= required_threshold:
-                        end_pos = ext_end
-                        start_pos_use = ext_start
-
-                        # Check midpoint/start occlusion
-                        midpoint = (start_pos_use + end_pos) // 2
-                        if not seen_mask[start_pos_use] and not seen_mask[min(midpoint, n - 1)]:
-
-                            entropy = MotifUtils.calculate_entropy(motif)
-                            if entropy >= self.min_entropy or length >= 20:
-
-                                refined = MotifUtils.refine_repeat(
-                                    sequence_str,
-                                    start_pos_use,
-                                    end_pos,
-                                    motif,
-                                    mismatch_fraction=self.allowed_mismatch_rate,
-                                    indel_fraction=self.allowed_indel_rate,
-                                    min_copies=self.min_copies
-                                )
-
-                                if refined:
-                                    repeats.append(self._build_repeat(chromosome, refined, tier=1))
-                                    # Mask only the original perfect seed region
-                                    # so adjacent repeats with the same motif
-                                    # separated by a small gap can still be found.
-                                    seed_end = min(start_pos + perfect_length, n)
-                                    seen_mask[start_pos:seed_end] = True
-
-                    # Move `i` cursor to end of chunk (we technically could rewind slightly for overlapping shifts, 
-                    # but refine_repeat handles localized shifts around the anchor!)
+                    array_start = run_start
+                    array_end = j + motif_len
+                    seed_copies = (array_end - array_start) // motif_len
                     i = j
-                    
+                    if seed_copies < seed_min_copies:
+                        continue
+                    mid = (array_start + array_end) // 2
+                    if seen_mask[array_start] or seen_mask[min(mid, n - 1)]:
+                        continue
+                    motif_check = sequence_str[array_start:array_start + motif_len]
+                    if '$' in motif_check or 'N' in motif_check:
+                        continue
+                    candidates.append((array_start, array_end, seed_copies))
+
+            for array_start, array_end, seed_copies in candidates:
+                seed_length = array_end - array_start
+
+                # Extract motif, skip invalid
+                motif = sequence_str[array_start:array_start + motif_len]
+                if MotifUtils.smallest_period_str(motif) < motif_len:
+                    continue
+
+                # Extend with mismatch tolerance to capture imperfect copies
+                perfect_length = seed_length
+                ext_start = array_start
+                ext_end = array_end
+                ext_length = seed_length
+                ext_copies = seed_copies
+                min_copies_for_ext = 5 if motif_len <= 3 else 2
+                if seed_copies >= min_copies_for_ext:
+                    ext_res = extend_with_mismatches(
+                        text_arr, array_start, motif_len, n,
+                        self.allowed_mismatch_rate
+                    )
+                    if ext_res is not None:
+                        arr_s, arr_e, ec, full_s, full_e = ext_res
+                        if full_e - full_s > seed_length:
+                            ext_start = full_s
+                            ext_end = full_e
+                            ext_length = ext_end - ext_start
+                            ext_copies = ec
+
+                # Check EXTENDED length against the real threshold
+                if ext_length < required_threshold or ext_copies < dynamic_min_copies:
+                    continue
+
+                entropy = MotifUtils.calculate_entropy(motif)
+                if entropy < self.min_entropy and ext_length < 20:
+                    continue
+
+                refined = MotifUtils.refine_repeat(
+                    sequence_str,
+                    ext_start,
+                    ext_end,
+                    motif,
+                    mismatch_fraction=self.allowed_mismatch_rate,
+                    indel_fraction=self.allowed_indel_rate,
+                    min_copies=self.min_copies
+                )
+
+                # If extended region was rejected, fall back to seed region
+                if refined is None and ext_start != array_start:
+                    refined = MotifUtils.refine_repeat(
+                        sequence_str,
+                        array_start,
+                        array_start + perfect_length,
+                        motif,
+                        mismatch_fraction=self.allowed_mismatch_rate,
+                        indel_fraction=self.allowed_indel_rate,
+                        min_copies=self.min_copies
+                    )
+
+                if refined:
+                    repeats.append(self._build_repeat(chromosome, refined, tier=1))
+                    seed_end = min(array_start + perfect_length, n)
+                    seen_mask[array_start:seed_end] = True
+
         if self.show_progress:
-            print(f"  [{chromosome}] Tier 1 FM-index found {len(repeats)} repeats in {time.time() - t0:.2f}s", flush=True)
+            print(f"  [{chromosome}] Tier 1 found {len(repeats)} repeats in {time.time() - t0:.2f}s", flush=True)
 
         return repeats
