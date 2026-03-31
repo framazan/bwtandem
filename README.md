@@ -585,14 +585,19 @@ main.py
 
 ### Synthetic Sequence Accuracy (44 ground truth repeats)
 
-Comparison on 5 synthetic test sequences containing 44 planted repeats with known positions and motifs:
+Comparison on 5 synthetic test sequences containing 44 planted repeats with known positions and motifs (periods 1 bp–1000 bp, including adjacent/edge cases):
 
 | Tool | Sensitivity | Precision | F1 |
 |------|-------------|-----------|-----|
 | **bwtandem** | **100.0%** | **100.0%** | **100.0%** |
-| TRF | 97.7% | 100.0% | 98.9% |
+| TRF 4.10 | 97.7% | **100.0%** | 98.9% |
+| ULTRA 1.2.1 | 72.7% | 71.1% | 71.9% |
+| mreps 2.6 | 68.2% | 7.6% | 13.6% |
 
-bwtandem detected all 44 repeats with zero false positives, including all 11 adjacent/edge-case repeats (TRF missed 1).
+- **bwtandem**: Detected all 44 repeats with zero false positives, including all 11 adjacent/edge-case repeats
+- **TRF**: High precision but missed 1 adjacent repeat (97.7% sensitivity)
+- **ULTRA**: Good at short repeats (Tier 1/2: 100%) but weak on long repeats (Tier 3: 12.5%, max period=100 by default)
+- **mreps**: High over-detection (366 false positives across 5 sequences), low sensitivity on long repeats (25%)
 
 ### Arabidopsis Chr4 (18.5 Mbp)
 
