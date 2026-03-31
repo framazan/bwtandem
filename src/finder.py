@@ -40,7 +40,7 @@ class TandemRepeatFinder:
         if not sequence.endswith('$'):
             sequence += '$'
         
-        self.bwt = BWTCore(sequence)
+        self.bwt = BWTCore(sequence, sa_sample_rate=1)
         if show_progress:
             print(f"  [{chromosome}] BWT built in {time.time() - t0:.2f}s", flush=True)
 
