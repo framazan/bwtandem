@@ -873,3 +873,68 @@ cpdef list find_tandem_runs(
         results.append((run_start, expected_next))
 
     return results
+
+
+cpdef tuple anchor_scan_boundaries(
+    const unsigned char[:] text_arr,
+    int seed_pos,
+    int period,
+    int n,
+    double match_threshold,
+    int max_backward_periods,
+    int max_forward_periods,
+):
+    """Scan backward and forward from seed_pos to find repeat boundaries.
+
+    Compares windows of size `period` against the motif at seed_pos.
+    Extends as long as match ratio >= match_threshold.
+
+    Returns (true_start, true_end).
+    """
+    cdef int true_start = seed_pos
+    cdef int true_end = seed_pos + period
+    cdef int pos, i, matches
+    cdef int scan_start, scan_end
+
+    # Motif reference is text_arr[seed_pos : seed_pos + period]
+    # If seed_pos + period > n, clamp
+    if seed_pos + period > n:
+        return (true_start, true_end)
+
+    # --- Scan backward ---
+    scan_start = seed_pos - period * max_backward_periods
+    if scan_start < 0:
+        scan_start = 0
+
+    pos = seed_pos - period
+    while pos >= scan_start:
+        if pos + period > n:
+            break
+        matches = 0
+        for i in range(period):
+            if text_arr[pos + i] == text_arr[seed_pos + i]:
+                matches += 1
+        if <double>matches / <double>period >= match_threshold:
+            true_start = pos
+            pos -= period
+        else:
+            break
+
+    # --- Scan forward ---
+    scan_end = seed_pos + period * max_forward_periods
+    if scan_end > n:
+        scan_end = n
+
+    pos = seed_pos + period
+    while pos + period <= scan_end:
+        matches = 0
+        for i in range(period):
+            if text_arr[pos + i] == text_arr[seed_pos + i]:
+                matches += 1
+        if <double>matches / <double>period >= match_threshold:
+            true_end = pos + period
+            pos += period
+        else:
+            break
+
+    return (true_start, true_end)
