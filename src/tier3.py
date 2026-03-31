@@ -157,110 +157,110 @@ class Tier3LongReadFinder:
             label=f"{chromosome} Tier3",      # Label for progress messages
         )  # Returns: list of SeedCandidate objects (raw repeat candidates)
 
-        # ===== Tier 3 후처리: 후보를 TandemRepeat 객체로 변환 =====
-        repeats = []          # 최종 결과 리스트
-        seen_regions = set()  # 중복 후보 제거를 위한 영역 키 집합
+        # ===== Tier 3 post-processing: convert candidates to TandemRepeat objects =====
+        repeats = []          # Final results list
+        seen_regions = set()  # Set of region keys for deduplication
 
-        for cand in seed_candidates:  # 각 시드 후보에 대해 후처리 수행
-            region_key = (cand.start // max(cand.period, 1), cand.period)  # 반복 영역 식별 키 (중복 제거용)
-            if region_key in seen_regions:  # 이미 처리된 영역이면 건너뜀
+        for cand in seed_candidates:  # Post-process each seed candidate
+            region_key = (cand.start // max(cand.period, 1), cand.period)  # Region identification key (for deduplication)
+            if region_key in seen_regions:  # Skip if this region was already processed
                 continue
 
-            period = cand.period      # 탐지된 반복 단위 길이
-            copies = cand.copies      # 탐지된 복사 수
-            full_start = cand.start   # 확장 후 반복 배열 시작 위치
-            full_end = cand.end       # 확장 후 반복 배열 끝 위치
+            period = cand.period      # Detected repeat unit length
+            copies = cand.copies      # Detected copy count
+            full_start = cand.start   # Repeat array start position after extension
+            full_end = cand.end       # Repeat array end position after extension
 
-            # 초장대 반복 (복사 수 >100 또는 길이 >10kb): 앵커 기반 경계 검증 사용
-            # 전체 DP 정렬은 비용이 크므로 앵커 스캔으로 대체
+            # Ultra-long repeats (copies >100 or length >10kb): use anchor-based boundary verification
+            # Full DP alignment is too expensive, so use anchor scanning instead
             if copies > 100 or (full_end - full_start) > 10000:
-                seed_pos = cand.seed_pos  # 이 후보를 생성한 원본 시드 위치
-                # 시드 위치가 서열 끝을 벗어나면 full_start로 폴백
+                seed_pos = cand.seed_pos  # Original seed position that generated this candidate
+                # Fall back to full_start if seed position exceeds sequence end
                 if seed_pos + period > n:
                     seed_pos = full_start
 
-                motif_arr = text_arr[seed_pos:seed_pos + period]  # 시드 위치에서 모티프 추출
-                motif = motif_arr.tobytes().decode('ascii', errors='replace')  # 바이트 배열을 문자열로 변환
+                motif_arr = text_arr[seed_pos:seed_pos + period]  # Extract motif from seed position
+                motif = motif_arr.tobytes().decode('ascii', errors='replace')  # Convert byte array to string
 
-                # 앵커 기반 경계 검증: Cython 가속으로 실제 반복 시작/끝 위치 정밀화
+                # Anchor-based boundary verification: refine actual repeat start/end using Cython acceleration
                 true_start, true_end = anchor_scan_boundaries(
                     text_arr, seed_pos, period, n,
                     anchor_match_pct, scan_bw_periods, scan_fw_periods,
-                )  # 앵커 매칭 비율과 스캔 범위를 기반으로 경계 재계산
+                )  # Recompute boundaries based on anchor match ratio and scan range
 
-                true_copies = (true_end - true_start) / period  # 실제 복사 수 재계산
+                true_copies = (true_end - true_start) / period  # Recompute actual copy count
 
-                if true_copies >= self.min_copies:  # 최소 복사 수 조건을 만족하는 경우만 결과로 처리
-                    max_consensus_copies = min(int(true_copies), 20)  # 컨센서스 계산에 사용할 최대 복사 수 (효율을 위해 20으로 제한)
+                if true_copies >= self.min_copies:  # Only produce results meeting the minimum copy count
+                    max_consensus_copies = min(int(true_copies), 20)  # Max copies for consensus computation (capped at 20 for efficiency)
                     consensus_arr, mm_rate, max_mm = MotifUtils.build_consensus_motif_array(
                         text_arr, true_start, period, max_consensus_copies
-                    )  # 샘플링된 복사들로 컨센서스 모티프와 미스매치 통계 계산
+                    )  # Compute consensus motif and mismatch statistics from sampled copies
                     consensus_motif = consensus_arr.tobytes().decode('ascii', errors='replace') if consensus_arr.size > 0 else motif
-                    # 컨센서스 배열이 비어 있으면 원본 모티프로 폴백
+                    # Fall back to original motif if consensus array is empty
 
                     (percent_matches, percent_indels, score, composition,
                      entropy, actual_sequence) = MotifUtils.calculate_trf_statistics(
                         text_arr, true_start, true_end, consensus_motif, int(true_copies), mm_rate
-                    )  # TRF 호환 통계 계산: 매칭률, 삽입결실률, 점수, 염기 조성, 엔트로피, 실제 서열
+                    )  # Compute TRF-compatible statistics: match rate, indel rate, score, base composition, entropy, actual sequence
 
-                    # TandemRepeat 객체 생성 (앵커 기반 경계 사용)
+                    # Create TandemRepeat object (using anchor-based boundaries)
                     repeat = TandemRepeat(
-                        chrom=chromosome,           # 염색체 이름
-                        start=true_start,           # 실제 반복 시작 위치 (0-based)
-                        end=true_end,               # 실제 반복 끝 위치 (0-based)
-                        motif=motif,                # 원본 시드에서 추출한 모티프
-                        copies=float(true_copies),  # 실제 복사 수 (float)
-                        length=true_end - true_start,  # 반복 배열 총 길이
-                        tier=3,                     # 이 결과가 Tier 3에서 생성됨을 표시
-                        confidence=max(0.5, 1.0 - mm_rate),  # 신뢰도: 미스매치율이 낮을수록 높음 (최소 0.5)
-                        consensus_motif=consensus_motif,      # 컨센서스 기반 모티프
-                        mismatch_rate=mm_rate,                # 평균 미스매치율
-                        max_mismatches_per_copy=max_mm,       # 복사당 최대 미스매치 수
-                        n_copies_evaluated=max_consensus_copies,  # 컨센서스 계산에 사용된 복사 수
-                        strand='+',                           # 정방향 가닥 (Tier3는 항상 '+')
-                        percent_matches=percent_matches,      # TRF 통계: 매칭 비율
-                        percent_indels=percent_indels,        # TRF 통계: 삽입결실 비율
-                        score=score,                          # TRF 통계: 점수
-                        composition=composition,              # TRF 통계: 염기 조성
-                        entropy=entropy,                      # TRF 통계: 서열 엔트로피
+                        chrom=chromosome,           # Chromosome name
+                        start=true_start,           # Actual repeat start position (0-based)
+                        end=true_end,               # Actual repeat end position (0-based)
+                        motif=motif,                # Motif extracted from original seed
+                        copies=float(true_copies),  # Actual copy count (float)
+                        length=true_end - true_start,  # Total repeat array length
+                        tier=3,                     # Indicates this result was produced by Tier 3
+                        confidence=max(0.5, 1.0 - mm_rate),  # Confidence: higher when mismatch rate is lower (min 0.5)
+                        consensus_motif=consensus_motif,      # Consensus-based motif
+                        mismatch_rate=mm_rate,                # Average mismatch rate
+                        max_mismatches_per_copy=max_mm,       # Maximum mismatches per copy
+                        n_copies_evaluated=max_consensus_copies,  # Number of copies used for consensus computation
+                        strand='+',                           # Forward strand (Tier 3 always uses '+')
+                        percent_matches=percent_matches,      # TRF statistic: match percentage
+                        percent_indels=percent_indels,        # TRF statistic: indel percentage
+                        score=score,                          # TRF statistic: score
+                        composition=composition,              # TRF statistic: base composition
+                        entropy=entropy,                      # TRF statistic: sequence entropy
                         actual_sequence=actual_sequence[:500] if len(actual_sequence) > 500 else actual_sequence,
-                        # 실제 서열: 출력 크기 제한을 위해 500bp로 절단
-                        variations=None  # Tier3는 변이 정보를 기록하지 않음
+                        # Actual sequence: truncated to 500bp to limit output size
+                        variations=None  # Tier 3 does not record variation information
                     )
                 else:
-                    repeat = None  # 최소 복사 수 미달: 결과 없음
+                    repeat = None  # Below minimum copy count: no result
             else:
-                # 상대적으로 짧은 반복 (<100복사 또는 <10kb): 전체 DP 정렬로 정밀화
-                motif_arr = text_arr[full_start:full_start + period]  # 반복 시작 위치에서 모티프 추출
-                motif = motif_arr.tobytes().decode('ascii', errors='replace')  # 바이트 배열을 문자열로 변환
+                # Relatively short repeats (<100 copies or <10kb): refine with full DP alignment
+                motif_arr = text_arr[full_start:full_start + period]  # Extract motif from repeat start position
+                motif = motif_arr.tobytes().decode('ascii', errors='replace')  # Convert byte array to string
 
                 refined = MotifUtils.refine_repeat(
-                    self.bwt.text,        # 원본 텍스트 (문자열)
-                    full_start,           # 반복 배열 시작 위치
-                    full_end,             # 반복 배열 끝 위치
-                    motif,                # 초기 모티프
-                    mismatch_fraction=0.2,  # 허용 미스매치 비율 (20%)
-                    indel_fraction=0.1,   # 허용 삽입결실 비율 (10%)
-                    min_copies=int(self.min_copies)  # 최소 복사 수
-                )  # DP 정렬 기반 반복 서열 정밀화 (원시 주기 감소 포함)
+                    self.bwt.text,        # Original text (string)
+                    full_start,           # Repeat array start position
+                    full_end,             # Repeat array end position
+                    motif,                # Initial motif
+                    mismatch_fraction=0.2,  # Allowed mismatch fraction (20%)
+                    indel_fraction=0.1,   # Allowed indel fraction (10%)
+                    min_copies=int(self.min_copies)  # Minimum copy count
+                )  # DP alignment-based repeat refinement (includes primitive period reduction)
 
                 if refined:
                     repeat = MotifUtils.refined_to_repeat(chromosome, refined, tier=3, text_arr=text_arr)
-                    # 정밀화 결과를 TandemRepeat 객체로 변환
+                    # Convert refinement result to TandemRepeat object
                 else:
-                    repeat = None  # DP 정밀화 실패: 결과 없음
+                    repeat = None  # DP refinement failed: no result
 
             if repeat:
-                # 기존 결과와의 포함 관계 확인 (완전히 포함된 경우 새 결과 무시)
-                is_new = True  # 기본적으로 새 결과로 간주
+                # Check containment against existing results (ignore new result if fully contained)
+                is_new = True  # Assume new result by default
                 for r in repeats:
                     if r.start <= repeat.start and r.end >= repeat.end:
-                        is_new = False  # 기존 결과가 현재 반복을 완전히 포함하면 중복으로 처리
+                        is_new = False  # Existing result fully contains current repeat; treat as duplicate
                         break
 
                 if is_new:
-                    repeats.append(repeat)             # 최종 결과 리스트에 추가
-                    seen_regions.add(region_key)       # 해당 영역 키를 처리 완료로 등록
-                    mask[repeat.start:min(repeat.end, n)] = True  # 발견된 영역을 마스크에 표시 (후속 시딩 스킵)
+                    repeats.append(repeat)             # Add to final results list
+                    seen_regions.add(region_key)       # Register this region key as processed
+                    mask[repeat.start:min(repeat.end, n)] = True  # Mark discovered region in mask (skip subsequent seeding)
 
-        return repeats  # 발견된 모든 장대 반복 서열 결과 반환
+        return repeats  # Return all discovered long tandem repeat results
