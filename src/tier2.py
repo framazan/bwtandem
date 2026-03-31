@@ -446,8 +446,10 @@ class Tier2LCPFinder:
         lcp = self._get_lcp_array()
         sa = self.bwt.suffix_array.astype(np.int32, copy=False)
 
+        # Dynamic LCP threshold: shorter periods use lower threshold
+        lcp_thresh = max(8, min_p // 2)
         candidates = lcp_tandem_candidates(
-            sa, lcp, n, min_p, max_p, min_lcp_threshold=10
+            sa, lcp, n, min_p, max_p, min_lcp_threshold=lcp_thresh
         )
 
         # Group candidates by period, skip tier1-covered positions
@@ -518,12 +520,14 @@ class Tier2LCPFinder:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase B (BWT k-mer seeding)...", flush=True)
 
         kmer_size = min(10, max(6, min_p - 1))
+        # Dynamic stride: use smaller stride for shorter periods
+        seed_stride = min(10, max(3, min_p // 3))
         seed_candidates = bwt_kmer_seed_scan(
             bwt=self.bwt,
             min_period=min_p,
             max_period=max_p,
             kmer_size=kmer_size,
-            stride=10,
+            stride=seed_stride,
             min_copies=2 if min_p >= 20 else self.min_copies,
             allowed_mismatch_rate=self.allowed_mismatch_rate,
             covered_mask=covered_mask,

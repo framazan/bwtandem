@@ -266,20 +266,40 @@ class TandemRepeatFinder:
             canon2, strand2 = MotifUtils.get_canonical_motif_stranded(motif2)  # 현재 모티프의 정규 형태와 가닥 방향
 
             # Allow merge if canonical motifs match and gap is small
-            if canon1 == canon2 and gap <= max(10, len(canon1)):
-                # 정규 모티프가 같고 간격이 모티프 길이 또는 10bp 이하이면 병합
-                # Merge them
-                new_start = min(prev.start, current.start)  # 병합된 반복 서열의 시작 위치
-                new_end = max(prev.end, current.end)         # 병합된 반복 서열의 끝 위치
+            max_gap = max(10, len(canon1))
+            if canon1 == canon2 and gap <= max_gap:
+                # Trial merge: check if combined region quality is acceptable
+                new_start = min(prev.start, current.start)
+                new_end = max(prev.end, current.end)
+                avg_mm = (prev.mismatch_rate + current.mismatch_rate) / 2
 
-                # Update prev
-                prev.start = new_start          # 시작 위치 갱신
-                prev.end = new_end              # 끝 위치 갱신
-                prev.length = new_end - new_start  # 총 길이 갱신
-                prev.copies = prev.length / len(canon1)  # 복제 수 재계산
+                # Quick quality check: scan the merged region
+                # Use actual motif from prediction (not canonical) for comparison
+                text_arr = self.bwt.text_arr
+                actual_motif = motif1
+                motif_arr = np.frombuffer(actual_motif.encode('ascii'), dtype=np.uint8)
+                mlen = len(actual_motif)
+                trial_mismatches = 0
+                trial_total = 0
+                for pos in range(new_start, min(new_end, len(text_arr) - mlen), mlen):
+                    window = text_arr[pos:pos + mlen]
+                    if len(window) == mlen:
+                        trial_mismatches += np.sum(window != motif_arr)
+                        trial_total += mlen
+                trial_mm = trial_mismatches / trial_total if trial_total > 0 else 0
 
-                # Recompute stats for the merged repeat
-                self._recompute_stats(prev)  # 병합된 반복 서열의 통계 재계산
+                # Only merge if trial mismatch rate is reasonable
+                # (not more than 2x the average of individual rates + 5% margin)
+                max_acceptable_mm = max(avg_mm * 2, 0.15)
+                if trial_mm <= max_acceptable_mm:
+                    prev.start = new_start
+                    prev.end = new_end
+                    prev.length = new_end - new_start
+                    prev.copies = prev.length / len(canon1)
+                    self._recompute_stats(prev)
+                else:
+                    # Mismatch too high after merge — keep as separate repeats
+                    merged.append(current)
 
             else:
                 merged.append(current)  # 병합 조건을 만족하지 않으면 별도 항목으로 추가

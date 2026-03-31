@@ -18,7 +18,38 @@ BWT Tandem Repeat Finder는 게놈 FASTA 파일에서 직렬 반복 서열(Tande
 
 ## 설치 방법
 
-### Python 의존성 설치
+### Micromamba 환경 설정 (권장)
+
+[Micromamba](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html)를 사용하면 모든 의존성을 격리된 환경에서 관리할 수 있습니다.
+
+```bash
+# 1. 환경 생성 (Python 3.11 + 주요 의존성)
+micromamba create -n bwtandem python=3.11 numpy cython pytest numba setuptools -c conda-forge -y
+
+# 2. pydivsufsort 설치 (conda-forge에 없으므로 pip으로 설치, --no-build-isolation 필요)
+micromamba run -n bwtandem pip install pydivsufsort --no-build-isolation
+
+# 3. Cython 확장 빌드 (GCC 4.x 환경에서는 -std=c99 필요)
+micromamba run -n bwtandem python3 -c "
+from setuptools import setup, Extension
+from Cython.Build import cythonize
+import numpy as np
+ext_modules = [Extension('src._accelerators', ['src/_accelerators.pyx'],
+               include_dirs=[np.get_include()], extra_compile_args=['-std=c99'])]
+setup(script_args=['build_ext', '--inplace'],
+      ext_modules=cythonize(ext_modules, compiler_directives={'language_level': '3'}))
+"
+
+# 4. 테스트 실행
+micromamba run -n bwtandem python3 -m pytest tests/ -v
+
+# 5. 도구 실행
+micromamba run -n bwtandem python3 -m src.main input.fa --format bed -v
+```
+
+### Python 의존성 직접 설치
+
+Micromamba 없이 직접 설치할 수도 있습니다.
 
 ```bash
 # 필수 의존성
@@ -99,6 +130,8 @@ python3 -m src.main <fasta_file> [options]
 | `--tier3-mode MODE` | `balanced` | Tier 3 속도/정확도 프리셋: `fast`, `balanced`, `sensitive` |
 | `--format FORMAT` | `bed` | 출력 형식: `bed`, `vcf`, `trf`, `strfinder` |
 | `-o, --output PREFIX` | 입력 파일명 | 출력 파일 접두사 |
+| `-t, --threads INT` | `1` | 병렬 처리 프로세스 수 (염색체별 병렬 처리) |
+| `--mask MODE` | `none` | 마스킹 모드: `none`, `soft`, `hard`, `both` |
 | `-v, --verbose` | `False` | 진행 상황 출력 |
 | `--profile` | `False` | cProfile로 실행 시간 분석 후 상위 핫스팟 출력 |
 
@@ -117,6 +150,37 @@ python3 -m src.main <fasta_file> [options]
 - `fast`: 큰 k-mer 크기, 넓은 stride로 빠른 탐색 (민감도 감소)
 - `balanced`: 기본값, 속도와 정확도의 균형
 - `sensitive`: 작은 k-mer 크기, 좁은 stride로 세밀한 탐색 (속도 감소)
+
+**`-t, --threads`**
+멀티 프로세스로 여러 염색체를 동시에 처리합니다. 각 염색체가 독립적으로 BWT 인덱스를 구축하고 반복 서열을 탐지하므로, 다중 염색체 FASTA 파일에서 선형적 속도 향상을 기대할 수 있습니다. 단일 염색체 파일에서는 효과가 없습니다.
+
+```bash
+# 4개 프로세스로 병렬 처리
+python3 -m src.main genome.fa -t 4 -v
+
+# CPU 코어 수에 맞게 설정 (nproc 명령 활용)
+python3 -m src.main genome.fa -t $(nproc) -v
+```
+
+**`--mask`**
+게놈 FASTA 파일의 소프트 마스크(lowercase)와 하드 마스크(N) 영역을 처리하는 방법을 지정합니다.
+
+| 모드 | 소문자 (acgt) | N 문자 | 설명 |
+|------|-------------|-------|------|
+| `none` | 대문자로 변환 | 유지 | 기본값: 마스크 무시, 모든 서열 분석 |
+| `soft` | N으로 치환 | 유지 | 소프트 마스크 영역(반복 원소 등)을 건너뜀 |
+| `hard` | 대문자로 변환 | 유지 | 하드 마스크 영역(갭, 미지정 영역)만 건너뜀 |
+| `both` | N으로 치환 | 유지 | 소프트+하드 마스크 영역 모두 건너뜀 |
+
+소프트 마스크는 RepeatMasker 등의 도구에서 반복 원소(LINE, SINE, transposon 등)를 소문자로 표기하는 관례를 따릅니다. 이미 알려진 산재 반복(interspersed repeat)을 제외하고 직렬 반복만 분석하고 싶을 때 `--mask soft`를 사용합니다.
+
+```bash
+# 소프트 마스크 영역 제외하고 분석
+python3 -m src.main masked_genome.fa --mask soft -v
+
+# 소프트+하드 마스크 모두 제외
+python3 -m src.main masked_genome.fa --mask both -v
+```
 
 ---
 
@@ -323,7 +387,23 @@ python3 -m src.main small_region.fa \
     -o detailed_analysis
 ```
 
-### 예제 4: 프로파일링으로 성능 분석
+### 예제 4: 멀티 스레드 및 마스킹
+
+```bash
+# 4개 프로세스로 전체 게놈 병렬 처리
+python3 -m src.main genome.fa -t 4 --format bed -o genome_repeats -v
+
+# RepeatMasker 출력(소프트 마스크)에서 산재 반복 제외 후 분석
+python3 -m src.main masked_genome.fa --mask soft -t 8 -v
+
+# 하드 마스크(N 영역)만 제외하고 분석
+python3 -m src.main genome.fa --mask hard -v
+
+# 소프트+하드 마스크 모두 제외
+python3 -m src.main masked_genome.fa --mask both -t $(nproc) -v
+```
+
+### 예제 5: 프로파일링으로 성능 분석
 
 ```bash
 # 실행 시간 프로파일링 (상위 20개 핫스팟 출력)
@@ -338,17 +418,84 @@ python3 -m src.main input.fa --tiers tier1 --format trf --profile -v
 ## 테스트 실행
 
 ```bash
-# 전체 테스트 실행
-pytest tests/
+# 전체 테스트 실행 (micromamba 환경 사용 시)
+micromamba run -n bwtandem python3 -m pytest tests/ -v
+
+# 또는 환경 활성화 후 직접 실행
+micromamba activate bwtandem
+pytest tests/ -v
 
 # 특정 테스트 파일 실행
-pytest tests/test_adaptive_params.py -v
-pytest tests/test_anchor_scan.py -v
-pytest tests/test_tier3_wiring.py -v
-
-# 상세 출력 모드로 실행
-pytest tests/ -v --tb=short
+pytest tests/test_adaptive_params.py -v   # Tier 3 적응형 파라미터
+pytest tests/test_anchor_scan.py -v       # 앵커 기반 경계 스캔
+pytest tests/test_tier3_wiring.py -v      # Tier 3 통합 연결
+pytest tests/test_ground_truth.py -v -s   # 회귀 테스트 (상세 출력)
 ```
+
+### 테스트 구성 (29개 테스트 + 스트레스 테스트)
+
+| 테스트 파일 | 테스트 수 | 설명 | Cython 필요 |
+|------------|----------|------|------------|
+| `test_adaptive_params.py` | 10 | `compute_adaptive_params()` 단위 테스트: 프리셋별 동작, GC/커버리지 영향, 서열 길이별 모드 전환 | 아니오 |
+| `test_anchor_scan.py` | 5 | `anchor_scan_boundaries()` 단위 테스트: 완벽 반복, 플랭킹 서열, 불완전 반복, 단일 복사본 | 아니오 |
+| `test_tier3_wiring.py` | 3 | Tier 3 mode 파라미터 전달 검증: 초기화, 기본값, 시드 스캔 연결 | 아니오 |
+| `test_ground_truth.py` | 11 | 합성 시퀀스 기반 회귀 테스트: Tier별 민감도/정밀도 검증 | Tier 2/3 테스트만 |
+| `test_random_stress.py` | — | 30개 랜덤 시퀀스 스트레스 테스트 (`python3 -m tests.test_random_stress`로 실행) | 예 |
+
+### 회귀 테스트 (Ground Truth)
+
+`tests/fixtures/` 디렉터리에 100KB 합성 시퀀스(FASTA)와 정답 파일(BED)이 포함되어 있습니다. 각 시퀀스에는 알려진 위치에 알려진 모티프의 반복이 삽입되어 있으며, 테스트는 도구의 탐지 결과를 정답과 비교하여 민감도(sensitivity)와 정밀도(precision)를 자동 계산합니다.
+
+#### 합성 테스트 데이터
+
+| 파일 | 반복 수 | 설명 |
+|------|---------|------|
+| `synth_tier1.fa` / `synth_tier1_truth.bed` | 8 | Tier 1 반복: 1–6 bp 모티프, 완벽~5% 미스매치 |
+| `synth_tier2.fa` / `synth_tier2_truth.bed` | 8 | Tier 2 반복: 12–50 bp 모티프, 완벽~8% 미스매치+인델 |
+| `synth_tier3.fa` / `synth_tier3_truth.bed` | 8 | Tier 3 반복: 100–1000 bp 모티프, 완벽~10% 발산 |
+| `synth_mixed.fa` / `synth_mixed_truth.bed` | 9 | 모든 Tier 혼합 (단일 서열에 Tier 1/2/3 반복 공존) |
+| `synth_adjacent.fa` / `synth_adjacent_truth.bed` | 11 | 에지 케이스: 인접 반복, 접촉 반복, 복합 반복 |
+
+합성 데이터 재생성:
+```bash
+python3 tests/fixtures/generate_synthetic.py
+# seed=42로 재현 가능
+```
+
+#### 매칭 로직
+
+정답과 예측 결과를 매칭할 때 다음 기준을 적용합니다:
+1. **겹침 비율 (overlap ratio)** ≥ 50%: 두 구간의 겹침 길이 / 큰 구간의 길이
+2. **모티프 호환성**: 정규 모티프(canonical motif)가 일치하거나, 기본 주기(primitive period) 길이가 호환 (정수배 또는 ±20% 이내)
+
+불완전한 반복에서는 도구가 원래 모티프와 다른 컨센서스 모티프를 보고할 수 있으므로, 주기 호환성 검사를 통해 올바르게 탐지된 반복이 거짓 음성으로 분류되는 것을 방지합니다.
+
+#### 테스트 결과 (2026-03-30)
+
+**회귀 테스트 (합성 시퀀스, 11개 테스트)**
+
+| 테스트 | 민감도 | 정밀도 | F1 | 임계값 |
+|--------|--------|--------|-----|--------|
+| **Tier 1** | 100.0% | 100.0% | 100.0% | 민감도 ≥ 95%, 정밀도 ≥ 90% |
+| **Tier 2** | 100.0% | 100.0% | 100.0% | 민감도 ≥ 90%, 정밀도 ≥ 90% |
+| **Tier 3** | 100.0% | 100.0% | 100.0% | 민감도 ≥ 90%, 정밀도 ≥ 90% |
+| **Mixed (Tier 1)** | 100.0% | — | — | 민감도 ≥ 95% |
+| **Mixed (Tier 2)** | 100.0% | — | — | 민감도 ≥ 70% |
+| **Mixed (Tier 3)** | 100.0% | — | — | 민감도 ≥ 70% |
+| **Adjacent** | 100.0% | 100.0% | 100.0% | 민감도 ≥ 95%, 정밀도 ≥ 90% |
+
+**스트레스 테스트 (랜덤 30개 시퀀스, 108개 반복)**
+
+| 항목 | 민감도 | 정밀도 | F1 | 정답 수 |
+|------|--------|--------|-----|---------|
+| **전체** | 100.0% | 93.1% | 96.4% | 108 |
+| **Tier 1** | 100.0% | — | — | 54 |
+| **Tier 2** | 100.0% | — | — | 31 |
+| **Tier 3** | 100.0% | — | — | 23 |
+
+스트레스 테스트는 30개의 50KB 랜덤 시퀀스에 2–5개의 반복을 삽입하여 탐지기의 강건성을 검증합니다. 재현 가능한 시드(1000–1029)를 사용합니다.
+
+> **참고**: Tier 2/3/Mixed/Adjacent 테스트는 Cython 확장(`_accelerators.so`)이 빌드되어 있어야 실행됩니다. Cython 없이 실행하면 해당 테스트는 자동으로 건너뜁니다.
 
 ### 테스트 데이터
 
@@ -390,9 +537,23 @@ bwtandem/
 │   ├── _accelerators.pyx   # Cython 소스: Hamming 거리, LCP 탐지, DP 정렬 등
 │   └── utils.py            # 공통 유틸리티
 ├── tests/
-│   ├── test_adaptive_params.py  # Tier 3 adaptive 파라미터 단위 테스트
-│   ├── test_anchor_scan.py      # 앵커 기반 경계 검증 테스트
-│   └── test_tier3_wiring.py     # Tier 3 통합 연결 테스트
+│   ├── test_adaptive_params.py  # Tier 3 adaptive 파라미터 단위 테스트 (10개)
+│   ├── test_anchor_scan.py      # 앵커 기반 경계 검증 테스트 (5개)
+│   ├── test_tier3_wiring.py     # Tier 3 통합 연결 테스트 (3개)
+│   ├── test_ground_truth.py     # 합성 시퀀스 회귀 테스트 (11개)
+│   ├── test_random_stress.py    # 랜덤 30개 시퀀스 스트레스 테스트
+│   └── fixtures/
+│         ├── generate_synthetic.py    # 합성 데이터 생성 스크립트 (seed=42)
+│         ├── synth_tier1.fa           # Tier 1 합성 시퀀스 (100KB)
+│         ├── synth_tier1_truth.bed    # Tier 1 정답 BED
+│         ├── synth_tier2.fa           # Tier 2 합성 시퀀스 (100KB)
+│         ├── synth_tier2_truth.bed    # Tier 2 정답 BED
+│         ├── synth_tier3.fa           # Tier 3 합성 시퀀스 (100KB)
+│         ├── synth_tier3_truth.bed    # Tier 3 정답 BED
+│         ├── synth_mixed.fa           # 혼합 Tier 합성 시퀀스 (100KB)
+│         ├── synth_mixed_truth.bed    # 혼합 Tier 정답 BED
+│         ├── synth_adjacent.fa        # 인접 반복 에지 케이스 (100KB)
+│         └── synth_adjacent_truth.bed # 인접 반복 정답 BED
 ├── scripts/
 │   ├── mutate_fasta.py     # 랜덤 점 변이 도입 (미스매치 허용 테스트용)
 │   ├── run_trf.py          # TRF 실행 래퍼

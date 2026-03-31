@@ -2,9 +2,61 @@ import argparse  # 명령줄 인수 파싱을 위한 표준 라이브러리
 import sys  # 시스템 종료(sys.exit) 및 표준 출력을 위한 라이브러리
 import time  # 실행 시간 측정을 위한 표준 라이브러리
 import os  # 파일 경로 처리 및 존재 여부 확인을 위한 라이브러리
+import re  # 정규표현식을 위한 표준 라이브러리
 from typing import List, Iterator, Tuple  # 타입 힌트를 위한 typing 모듈
+from concurrent.futures import ProcessPoolExecutor, as_completed  # 멀티프로세싱을 위한 모듈
 from .finder import TandemRepeatFinder  # 멀티 티어 반복 서열 탐색 조율자
 from .models import TandemRepeat  # 반복 서열 데이터 클래스 및 출력 포맷터
+
+
+def apply_mask(seq: str, mask_mode: str) -> str:
+    """Apply masking to a sequence based on the mask mode.
+
+    - none: convert everything to uppercase (default behavior)
+    - soft: replace lowercase bases (soft-masked) with N
+    - hard: already-N regions remain N (no extra action needed beyond uppercase)
+    - both: replace lowercase with N, keep existing Ns
+    """
+    if mask_mode == "none":
+        return seq.upper()
+
+    result = []
+    for ch in seq:
+        if ch in 'acgt':
+            # Soft-masked base
+            if mask_mode in ("soft", "both"):
+                result.append('N')
+            else:
+                result.append(ch.upper())
+        elif ch == 'N' or ch == 'n':
+            # Hard-masked base
+            if mask_mode in ("hard", "both"):
+                result.append('N')
+            else:
+                result.append('N')  # N은 항상 N으로 유지
+        else:
+            result.append(ch.upper())
+    return ''.join(result)
+
+
+def _process_chromosome(chrom: str, seq: str, min_period: int, max_period: int,
+                        enabled_tiers: set, show_progress: bool,
+                        min_array_bp, max_array_bp, tier3_mode: str) -> List[TandemRepeat]:
+    """Process a single chromosome — designed to be called in parallel."""
+    finder = TandemRepeatFinder(
+        seq,
+        chromosome=chrom,
+        min_period=min_period,
+        max_period=max_period,
+        show_progress=show_progress,
+        enabled_tiers=enabled_tiers,
+        min_array_bp=min_array_bp,
+        max_array_bp=max_array_bp,
+        tier3_mode=tier3_mode,
+    )
+    repeats = finder.find_all()
+    finder.cleanup()
+    return repeats
 
 
 def _resolve_output_file(output_prefix: str, extension: str) -> str:
@@ -51,6 +103,11 @@ def main():
     parser.add_argument("--profile", action="store_true", help="Profile execution with cProfile and print top hotspots")  # 성능 프로파일링 플래그
     parser.add_argument("--tier3-mode", choices=["fast", "balanced", "sensitive"],
                         default="balanced", help="Tier 3 speed/accuracy preset (default: balanced)")  # Tier 3 속도/정확도 사전 설정 옵션
+    parser.add_argument("--threads", "-t", type=int, default=1,
+                        help="Number of threads for parallel chromosome processing (default: 1)")  # 병렬 처리 스레드 수 옵션
+    parser.add_argument("--mask", choices=["none", "soft", "hard", "both"], default="none",
+                        help="Masking mode: none=ignore masks, soft=skip lowercase regions, "
+                             "hard=skip N regions, both=skip both (default: none)")  # 마스킹 모드 옵션
 
     args = parser.parse_args()  # 명령줄 인수 파싱 실행
 
@@ -81,29 +138,52 @@ def main():
         profiler = cProfile.Profile()  # 프로파일러 인스턴스 생성
         profiler.enable()  # 프로파일링 시작
 
+    # 입력 서열 로드 및 마스킹 적용
+    sequences = []
     for chrom, seq in parse_fasta(args.fasta_file):
-        seq = seq.upper()  # DNA 서열을 대문자로 변환 (일관성 보장)
-
+        seq = apply_mask(seq, args.mask)  # 마스킹 모드에 따라 서열 처리
         if args.verbose:
-            # 상세 모드: 현재 처리 중인 시퀀스 이름과 길이 출력
-            print(f"Processing sequence: {chrom} ({len(seq)} bp)")
+            n_count = seq.count('N')
+            masked_pct = n_count / len(seq) * 100 if len(seq) > 0 else 0
+            mask_info = f", {n_count} N ({masked_pct:.1f}% masked)" if args.mask != "none" and n_count > 0 else ""
+            print(f"Processing sequence: {chrom} ({len(seq)} bp{mask_info})")
+        sequences.append((chrom, seq))
 
-        finder = TandemRepeatFinder(
-            seq,                          # 분석할 서열
-            chromosome=chrom,             # 염색체 이름
-            min_period=args.min_period,   # 최소 모티프 길이
-            max_period=args.max_period,   # 최대 모티프 길이
-            show_progress=args.verbose,   # 진행 상황 출력 여부
-            enabled_tiers=enabled_tiers,  # 활성화할 티어 집합
-            min_array_bp=args.min_array_bp,  # 반복 배열 최소 길이 필터
-            max_array_bp=args.max_array_bp,  # 반복 배열 최대 길이 필터
-            tier3_mode=args.tier3_mode,   # Tier 3 속도/정확도 모드
-        )
+    n_threads = max(1, args.threads)
 
-        repeats = finder.find_all()  # 멀티 티어 파이프라인 실행하여 반복 서열 탐색
-        all_repeats.extend(repeats)  # 현재 염색체 결과를 전체 결과 목록에 추가
+    if n_threads == 1 or len(sequences) == 1:
+        # 단일 스레드 모드: 순차 처리
+        for chrom, seq in sequences:
+            repeats = _process_chromosome(
+                chrom, seq, args.min_period, args.max_period,
+                enabled_tiers, args.verbose,
+                args.min_array_bp, args.max_array_bp, args.tier3_mode
+            )
+            all_repeats.extend(repeats)
+    else:
+        # 멀티 스레드 모드: 염색체별 병렬 처리
+        if args.verbose:
+            print(f"Using {n_threads} parallel processes for {len(sequences)} sequences")
+        with ProcessPoolExecutor(max_workers=n_threads) as executor:
+            futures = {}
+            for chrom, seq in sequences:
+                future = executor.submit(
+                    _process_chromosome,
+                    chrom, seq, args.min_period, args.max_period,
+                    enabled_tiers, args.verbose,
+                    args.min_array_bp, args.max_array_bp, args.tier3_mode
+                )
+                futures[future] = chrom
 
-        finder.cleanup()  # BWT/FM-인덱스 메모리 해제
+            for future in as_completed(futures):
+                chrom = futures[future]
+                try:
+                    repeats = future.result()
+                    all_repeats.extend(repeats)
+                    if args.verbose:
+                        print(f"  [{chrom}] Completed: {len(repeats)} repeats found")
+                except Exception as e:
+                    print(f"  [{chrom}] ERROR: {e}", file=sys.stderr)
 
     # Stop profiler and report
     if profiler is not None:
