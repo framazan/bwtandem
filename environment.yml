@@ -1,0 +1,16 @@
+name: bwt
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.13
+  - numpy
+  - numba
+  - cython
+  - pip
+  - trf
+  - setuptools
+  - mreps
+  - pip:
+      - pydivsufsort
