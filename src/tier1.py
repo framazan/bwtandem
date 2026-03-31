@@ -169,7 +169,12 @@ class Tier1STRFinder:
                     )
 
                 if refined:
-                    repeats.append(self._build_repeat(chromosome, refined, tier=1))
+                    rep = self._build_repeat(chromosome, refined, tier=1)
+                    # Quality filter: score = length * (1 - mismatch_rate) must be >= 30
+                    rep_score = (rep.end - rep.start) * (1.0 - rep.mismatch_rate)
+                    if rep_score < 30:
+                        continue
+                    repeats.append(rep)
                     seed_end = min(array_start + perfect_length, n)
                     seen_mask[array_start:seed_end] = True
 
