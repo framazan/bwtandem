@@ -63,3 +63,18 @@
 - **Result**: Tier 2 reduced from 245s to 117s (2.1x speedup)
 - **Overall**: Chr4 total 472s → 317s (1.5x speedup, 5 min 17 sec)
 - **Accuracy**: 11/11 tests passed, 100% sensitivity / 100% precision maintained
+
+## Step 8: Comprehensive C Extension Acceleration (Complete)
+- **Change**: C extensions for align_repeat_region, BWT backward_search, Kasai LCP, removed unused code
+- **Key modifications**:
+  - `src/c_extensions/align_accel.c`: Full DP alignment loop in C (banded semi-global DP per copy + consensus updates). 40x faster than Python loop (0.095ms vs 3.8ms per call)
+  - `src/c_extensions/bwt_accel.c`: C implementations of `count_equal_range`, `backward_search`, `kasai_lcp`, `batch_backward_search`. backward_search 10x faster, Kasai LCP 50x+ faster
+  - `src/bwt_core.py`: Integrated C rank queries, backward_search, and Kasai LCP. Added flat checkpoint data preparation for zero-overhead C access
+  - `src/motif_utils.py`: C-accelerated `align_repeat_region` with text pointer caching (avoids 72s from_buffer_copy). C-accelerated `smallest_period_str` and `smallest_period_str_approx`
+  - Removed unused `_build_kmer_hash` (28s) and `_sample_suffix_array` (5s) from BWTCore init
+- **Result**: Chr4 total 317s → 283s (1.12x speedup, 4 min 43 sec)
+  - BWT construction: 172s → 145s (kmer_hash/sampled_sa removed)
+  - backward_search: 231s → 22s (C, 10.5x)
+  - Kasai LCP: 49s → <1s (C, 50x+)
+  - Test suite: 15.2s → 7.8s (2x faster)
+- **Accuracy**: 29/29 tests passed, all ground truth tests maintain 100% sensitivity/precision

@@ -1,9 +1,23 @@
 import numpy as np
+import ctypes
 from typing import List, Tuple, Dict, Iterator, Optional
 from collections import Counter
 import math
 from .models import AlignmentResult, RepeatAlignmentSummary, RefinedRepeat, TandemRepeat
 from .accelerators import align_unit_to_window
+
+# Load C acceleration libraries
+try:
+    from .c_extensions.build import load_align as _load_align
+    _c_align_lib = _load_align()
+except Exception:
+    _c_align_lib = None
+
+try:
+    from .c_extensions.build import load_tier2 as _load_tier2
+    _c_tier2_lib = _load_tier2()
+except Exception:
+    _c_tier2_lib = None
 
 class MotifUtils:
     """Utilities for canonical motif handling.
@@ -438,6 +452,75 @@ class MotifUtils:
                 consensus.append(fallback[idx] if idx < len(fallback) else 'N')
         return ''.join(consensus)
 
+    # Class-level cache for text_arr pointer to avoid repeated from_buffer_copy
+    _c_text_cache_id = None
+    _c_text_ptr = None
+    _c_text_len = 0
+
+    @staticmethod
+    def _get_text_ptr(sequence: str):
+        """Get or cache ctypes pointer to sequence bytes."""
+        seq_id = id(sequence)
+        if MotifUtils._c_text_cache_id == seq_id:
+            return MotifUtils._c_text_ptr, MotifUtils._c_text_len
+
+        seq_len = len(sequence)
+        # Use numpy for zero-copy pointer access
+        text_arr = np.frombuffer(sequence.encode('ascii'), dtype=np.uint8)
+        MotifUtils._c_text_arr_ref = text_arr  # prevent GC
+        MotifUtils._c_text_ptr = text_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+        MotifUtils._c_text_len = seq_len
+        MotifUtils._c_text_cache_id = seq_id
+        return MotifUtils._c_text_ptr, seq_len
+
+    @staticmethod
+    def _align_repeat_region_c(sequence: str, start: int, end: int, motif_template: str,
+                               mismatch_fraction: float, max_indel: int,
+                               min_copies: int) -> Optional[RepeatAlignmentSummary]:
+        """Fast C implementation of align_repeat_region loop."""
+        if _c_align_lib is None:
+            return None
+
+        motif_len = len(motif_template)
+
+        try:
+            text_ptr, seq_len = MotifUtils._get_text_ptr(sequence)
+            motif_bytes = motif_template.encode('ascii')
+        except (UnicodeEncodeError, AttributeError):
+            return None
+
+        motif_arr = (ctypes.c_ubyte * motif_len).from_buffer_copy(motif_bytes)
+        result = _c_align_lib.AlignRegionResult()
+        consensus_buf = (ctypes.c_ubyte * motif_len)()
+
+        ok = _c_align_lib.align_repeat_region_c(
+            text_ptr, seq_len,
+            start, end,
+            motif_arr, motif_len,
+            mismatch_fraction, max_indel, min_copies,
+            ctypes.byref(result), consensus_buf
+        )
+
+        if not ok:
+            return None
+
+        consensus = bytes(consensus_buf).decode('ascii')
+
+        return RepeatAlignmentSummary(
+            consensus=consensus,
+            motif_len=motif_len,
+            copies=result.copies,
+            consumed_length=result.consumed_length,
+            mismatch_rate=result.mismatch_rate,
+            max_errors_per_copy=result.max_errors_per_copy,
+            variations=[],
+            copy_sequences=[],
+            total_insertions=result.total_insertions,
+            total_deletions=result.total_deletions,
+            error_counts=[],
+            total_mismatches=result.total_mismatches
+        )
+
     @staticmethod
     def align_repeat_region(sequence: str, start: int, end: int, motif_template: str,
                             mismatch_fraction: float = 0.1,
@@ -453,6 +536,23 @@ class MotifUtils:
 
         start = max(0, start)
         end = min(seq_len, end if end > start else seq_len)
+
+        motif_len = len(motif_template)
+        if motif_len == 0:
+            return None
+
+        if max_indel is None:
+            computed_indel = max(1, min(10, motif_len // 2 if motif_len >= 4 else 1))
+        else:
+            computed_indel = max(0, max_indel)
+
+        # Try C-accelerated path first
+        c_result = MotifUtils._align_repeat_region_c(
+            sequence, start, end, motif_template,
+            mismatch_fraction, computed_indel, min_copies
+        )
+        if c_result is not None:
+            return c_result
 
         motif_len = len(motif_template)
         if motif_len == 0:
@@ -630,6 +730,14 @@ class MotifUtils:
         if not s:
             return 0
         n = len(s)
+        # Use C acceleration when available
+        if _c_tier2_lib is not None and n <= 10000:
+            try:
+                s_bytes = s.encode('ascii')
+                arr = (ctypes.c_ubyte * n).from_buffer_copy(s_bytes)
+                return _c_tier2_lib.smallest_period_str(arr, n)
+            except Exception:
+                pass
         for p in range(1, n + 1):
             if n % p == 0 and s == s[:p] * (n // p):
                 return p
@@ -637,19 +745,25 @@ class MotifUtils:
 
     @staticmethod
     def smallest_period_str_approx(s: str, max_error_rate: float = 0.02) -> int:
-        """Return smallest approximate period length for a noisy string.
-
-        A period p is accepted when s differs from repetitions of s[:p]
-        by at most max_error_rate. Unlike strict periodicity, p does not need
-        to divide len(s), which lets us collapse motifs that end in a partial
-        cycle (common after noisy extension/refinement).
-        """
+        """Return smallest approximate period length for a noisy string."""
         if not s:
             return 0
 
         n = len(s)
         if n == 1:
             return 1
+
+        # Use C acceleration when available
+        if _c_tier2_lib is not None and n <= 10000:
+            try:
+                s_bytes = s.encode('ascii')
+                arr = (ctypes.c_ubyte * n).from_buffer_copy(s_bytes)
+                result = _c_tier2_lib.smallest_period_str_approx(
+                    arr, n, ctypes.c_double(max(0.0, min(0.05, max_error_rate)))
+                )
+                return result
+            except Exception:
+                pass
 
         max_error_rate = max(0.0, min(0.05, max_error_rate))
 

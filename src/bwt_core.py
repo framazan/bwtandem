@@ -1,4 +1,5 @@
 import numpy as np
+import ctypes
 from typing import List, Tuple, Dict, Union
 
 # Optional: JIT acceleration with numba when available
@@ -8,6 +9,14 @@ try:
     HAVE_NUMBA = True
 except Exception:
     _nb = None  # type: ignore
+
+# C acceleration for rank queries
+_c_bwt_lib = None
+try:
+    from .c_extensions.build import load_bwt as _load_bwt
+    _c_bwt_lib = _load_bwt()
+except Exception:
+    pass
 
 if HAVE_NUMBA:
     @_nb.njit(cache=True)
@@ -48,8 +57,20 @@ else:
         return int(np.count_nonzero(arr[start:end] == code))
 
     def _kasai_lcp_uint8(text_codes: np.ndarray, sa: np.ndarray) -> np.ndarray:
-        # Fallback non-jitted Kasai
         n = text_codes.size
+        # Use C acceleration when available
+        if _c_bwt_lib is not None:
+            sa32 = np.ascontiguousarray(sa, dtype=np.int32)
+            text_u8 = np.ascontiguousarray(text_codes, dtype=np.uint8)
+            lcp = np.zeros(n, dtype=np.int32)
+            _c_bwt_lib.kasai_lcp(
+                text_u8.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
+                sa32.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                n,
+                lcp.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+            )
+            return lcp
+        # Fallback non-jitted Kasai
         lcp = np.zeros(n, dtype=np.int32)
         rank = np.zeros(n, dtype=np.int32)
         for i in range(n):
@@ -92,8 +113,8 @@ class BWTCore:
 
         self.text_arr = np.frombuffer(text.encode('utf-8'), dtype=np.uint8)
 
-        # Build k-mer hash for fast lookups (performance optimization)
-        self._build_kmer_hash()
+        # Defer k-mer hash build (only needed for get_kmer_positions, rarely used)
+        self.kmer_hash = {}
 
         # Build suffix array and BWT (memory-efficient)
         self.suffix_array = self._build_suffix_array()
@@ -105,7 +126,18 @@ class BWTCore:
         self.char_counts_code = {ord(k): v for k, v in self.char_counts.items()}
         self.char_totals_code = {ord(k): v for k, v in self.char_totals.items()}
         self.occ_checkpoints = self._build_occurrence_checkpoints()
-        self.sampled_sa = self._sample_suffix_array()
+        # Defer SA sampling (only needed for _get_suffix_position, not used in pipeline)
+        self.sampled_sa = {}
+
+        # Prepare C-accelerated data structures for backward search
+        self._c_bwt_ptr = None
+        self._c_char_counts = None
+        self._c_char_totals = None
+        self._c_cp_flat = None
+        self._c_cp_offsets = None
+        self._c_cp_lengths = None
+        if _c_bwt_lib is not None:
+            self._prepare_c_bwt_data()
 
     def _build_kmer_hash(self, k: int = 8):
         """Build hash table for k-mer positions (bcftools-inspired optimization).
@@ -295,7 +327,53 @@ class BWTCore:
                 any_cp = next(iter(checkpoints.values())) if checkpoints else np.array([0], dtype=np.int32)
                 checkpoints[code] = np.zeros_like(any_cp)
         return checkpoints
-    
+
+    def _prepare_c_bwt_data(self):
+        """Flatten checkpoint data for C backward_search."""
+        # BWT array pointer
+        self._c_bwt_ptr = self.bwt_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+
+        # char_counts and char_totals as 256-element arrays
+        cc = (ctypes.c_int * 256)()
+        ct = (ctypes.c_int * 256)()
+        for ch, val in self.char_counts.items():
+            cc[ord(ch)] = val
+        for ch, val in self.char_totals.items():
+            ct[ord(ch)] = val
+        self._c_char_counts = cc
+        self._c_char_totals = ct
+
+        # Flatten checkpoints: concatenate all per-code checkpoint arrays
+        cp_offsets = (ctypes.c_int * 256)()
+        cp_lengths = (ctypes.c_int * 256)()
+        flat_parts = []
+        offset = 0
+        for code in range(256):
+            cp = self.occ_checkpoints.get(code)
+            if cp is not None and len(cp) > 0:
+                cp_offsets[code] = offset
+                cp_lengths[code] = len(cp)
+                flat_parts.append(np.asarray(cp, dtype=np.int32))
+                offset += len(cp)
+            else:
+                cp_offsets[code] = 0
+                cp_lengths[code] = 0
+
+        if flat_parts:
+            flat = np.concatenate(flat_parts).astype(np.int32)
+        else:
+            flat = np.zeros(1, dtype=np.int32)
+
+        self._c_cp_flat_arr = flat  # prevent GC
+        self._c_cp_flat = flat.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        self._c_cp_offsets = cp_offsets
+        self._c_cp_lengths = cp_lengths
+
+        # Pre-allocate output buffers for backward_search
+        self._c_out_buf = np.zeros(2, dtype=np.int32)
+        self._c_out_sp = self._c_out_buf[0:1].ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        self._c_out_ep = self._c_out_buf[1:2].ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+
     def _sample_suffix_array(self) -> Dict[int, int]:
         """Sample suffix array positions for space-efficient locating."""
         sampled = {}
@@ -315,6 +393,21 @@ class BWTCore:
         if pos > self.n:
             pos = self.n
         code = ord(char) if isinstance(char, str) else int(char)
+
+        # Use C count_equal_range when available (faster than numpy fallback)
+        if _c_bwt_lib is not None and self._c_bwt_ptr is not None:
+            cp_len = self._c_cp_lengths[code]
+            if cp_len == 0:
+                return 0
+            k = int(self.occ_sample_rate)
+            cp_idx = pos // k
+            cp_flat_offset = self._c_cp_offsets[code]
+            base = self._c_cp_flat_arr[cp_flat_offset + cp_idx]
+            cp_pos = cp_idx * k
+            if pos > cp_pos:
+                base += _c_bwt_lib.count_equal_range(self._c_bwt_ptr, cp_pos, pos, code)
+            return int(base)
+
         cp = self.occ_checkpoints.get(code)
         if cp is None:
             return 0
@@ -330,13 +423,27 @@ class BWTCore:
     def backward_search(self, pattern: str) -> Tuple[int, int]:
         """
         Find suffix array interval for pattern using backward search.
-        
+
         Returns:
             (start, end) interval in suffix array, or (-1, -1) if not found
         """
         if not pattern:
             return (0, self.n - 1)
-        
+
+        # Use C-accelerated backward search when available
+        if self._c_bwt_ptr is not None and _c_bwt_lib is not None:
+            pat_bytes = pattern.encode('ascii')
+            pat_arr = (ctypes.c_ubyte * len(pat_bytes)).from_buffer_copy(pat_bytes)
+            _c_bwt_lib.backward_search(
+                self._c_bwt_ptr, self.n,
+                pat_arr, len(pat_bytes),
+                self._c_char_counts, self._c_char_totals,
+                self._c_cp_flat, self._c_cp_offsets, self._c_cp_lengths,
+                int(self.occ_sample_rate),
+                self._c_out_sp, self._c_out_ep
+            )
+            return (self._c_out_sp[0], self._c_out_ep[0])
+
         # Initialize with character range
         char = pattern[-1]
         if char not in self.char_counts:
