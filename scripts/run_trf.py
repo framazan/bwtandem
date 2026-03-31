@@ -2,6 +2,7 @@ import time
 import subprocess
 import os
 import argparse
+import sys
 from trf_to_bed import convert_trf_ngs_to_bed
 
 def run_and_log_trf():
@@ -59,15 +60,17 @@ def run_and_log_trf():
         os.remove(dat_file)
             
     # Format the log file for validation
+    invocation = "python " + " ".join(sys.argv)
     log_content = [
-        f"Command: {cmd}",
+        f"Parent Command: {invocation}",
+        f"TRF Command: {cmd}",
         f"",
         f"Processing sequence: {os.path.basename(fa_path)}",
         f"  [TRF] Running Core Engine ({args.match} {args.mismatch} {args.delta} {args.PM} {args.PI} {args.minscore} {args.maxperiod})...",
         f"  [TRF] STDERR (if any): {result.stderr.strip() if result.stderr.strip() else 'None'}",
         f"Total repeats found: {repeat_count}",
         f"Total time: {elapsed:.2f}s",
-        f"Results seamlessly converted and written to -> {bed_file}"
+        f"Results converted and written to -> {bed_file}"
     ]
     
     log_text = "\n".join(log_content) + "\n"
