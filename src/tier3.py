@@ -4,6 +4,7 @@ from typing import List, Tuple, Set, Optional
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
+from .accelerators import anchor_scan_boundaries
 from .bwt_seed import bwt_kmer_seed_scan
 
 
@@ -172,44 +173,19 @@ class Tier3LongReadFinder:
             # For ultra-long repeats (>100 copies or >10kb), use anchor-based
             # boundary verification instead of expensive DP refinement
             if copies > 100 or (full_end - full_start) > 10000:
-                motif_arr = text_arr[cand.seed_pos:cand.seed_pos + period]
-                if motif_arr.size < period:
-                    motif_arr = text_arr[full_start:full_start + period]
+                seed_pos = cand.seed_pos
+                # Use seed_pos as motif source; fall back to full_start if truncated
+                if seed_pos + period > n:
+                    seed_pos = full_start
+
+                motif_arr = text_arr[seed_pos:seed_pos + period]
                 motif = motif_arr.tobytes().decode('ascii', errors='replace')
 
-                # Anchor-based boundary verification:
-                # Scan backward from seed to find true start
-                true_start = cand.seed_pos
-                true_end = cand.seed_pos + period
-
-                scan_start = max(0, cand.seed_pos - period * scan_bw_periods)
-                pos = cand.seed_pos - period
-                while pos >= scan_start:
-                    window = text_arr[pos:pos + period]
-                    if window.size == period:
-                        matches = np.sum(window == motif_arr)
-                        if matches / period >= anchor_match_pct:
-                            true_start = pos
-                            pos -= period
-                        else:
-                            break
-                    else:
-                        break
-
-                # Scan forward from seed to find true end
-                scan_end = min(n, cand.seed_pos + period * scan_fw_periods)
-                pos = cand.seed_pos + period
-                while pos + period <= scan_end:
-                    window = text_arr[pos:pos + period]
-                    if window.size == period:
-                        matches = np.sum(window == motif_arr)
-                        if matches / period >= anchor_match_pct:
-                            true_end = pos + period
-                            pos += period
-                        else:
-                            break
-                    else:
-                        break
+                # Anchor-based boundary verification (Cython-accelerated)
+                true_start, true_end = anchor_scan_boundaries(
+                    text_arr, seed_pos, period, n,
+                    anchor_match_pct, scan_bw_periods, scan_fw_periods,
+                )
 
                 true_copies = (true_end - true_start) / period
 

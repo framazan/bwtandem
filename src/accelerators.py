@@ -101,6 +101,20 @@ if _native is not None:
         min_copies: int
     ) -> list:
         return _native.find_tandem_runs(positions, period, min_copies)
+
+    def anchor_scan_boundaries(
+        text_arr: np.ndarray,
+        seed_pos: int,
+        period: int,
+        n: int,
+        match_threshold: float,
+        max_backward_periods: int,
+        max_forward_periods: int,
+    ) -> Tuple[int, int]:
+        return _native.anchor_scan_boundaries(
+            text_arr, seed_pos, period, n, match_threshold,
+            max_backward_periods, max_forward_periods
+        )
 else:
     def hamming_distance(arr1: np.ndarray, arr2: np.ndarray) -> Optional[int]:
         return None
@@ -219,3 +233,52 @@ else:
         if count >= min_copies:
             results.append((run_start, expected_next))
         return results
+
+    def anchor_scan_boundaries(
+        text_arr: np.ndarray,
+        seed_pos: int,
+        period: int,
+        n: int,
+        match_threshold: float,
+        max_backward_periods: int,
+        max_forward_periods: int,
+    ) -> Tuple[int, int]:
+        """Pure-Python fallback for anchor-based boundary scanning."""
+        if seed_pos + period > n:
+            return (seed_pos, seed_pos + period)
+
+        motif_arr = text_arr[seed_pos:seed_pos + period]
+        true_start = seed_pos
+        true_end = seed_pos + period
+
+        # Scan backward
+        scan_start = max(0, seed_pos - period * max_backward_periods)
+        pos = seed_pos - period
+        while pos >= scan_start:
+            window = text_arr[pos:pos + period]
+            if window.size == period:
+                matches = int(np.sum(window == motif_arr))
+                if matches / period >= match_threshold:
+                    true_start = pos
+                    pos -= period
+                else:
+                    break
+            else:
+                break
+
+        # Scan forward
+        scan_end = min(n, seed_pos + period * max_forward_periods)
+        pos = seed_pos + period
+        while pos + period <= scan_end:
+            window = text_arr[pos:pos + period]
+            if window.size == period:
+                matches = int(np.sum(window == motif_arr))
+                if matches / period >= match_threshold:
+                    true_end = pos + period
+                    pos += period
+                else:
+                    break
+            else:
+                break
+
+        return (true_start, true_end)
