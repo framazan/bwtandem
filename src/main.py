@@ -48,7 +48,9 @@ def main():
     parser.add_argument("--format", choices=["bed", "vcf", "trf", "strfinder"], default="bed", help="Output format")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")
     parser.add_argument("--profile", action="store_true", help="Profile execution with cProfile and print top hotspots")
-    
+    parser.add_argument("--tier3-mode", choices=["fast", "balanced", "sensitive"],
+                        default="balanced", help="Tier 3 speed/accuracy preset (default: balanced)")
+
     args = parser.parse_args()
     
     if not os.path.exists(args.fasta_file):
@@ -90,7 +92,8 @@ def main():
             show_progress=args.verbose,
             enabled_tiers=enabled_tiers,
             min_array_bp=args.min_array_bp,
-            max_array_bp=args.max_array_bp
+            max_array_bp=args.max_array_bp,
+            tier3_mode=args.tier3_mode,
         )
         
         repeats = finder.find_all()
