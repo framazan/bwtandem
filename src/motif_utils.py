@@ -6,14 +6,74 @@ from .models import AlignmentResult, RepeatAlignmentSummary, RefinedRepeat, Tand
 from .accelerators import align_unit_to_window
 
 class MotifUtils:
-    """Utilities for canonical motif handling."""
+    """Utilities for canonical motif handling.
+
+    Uses integer encoding for fast k-mer comparison (inspired by STRling,
+    Genome Biology 2022, DOI:10.1186/s13059-022-02826-4).
+    Encodes bases as 2-bit integers for O(1) rotation comparison
+    instead of O(k) string comparison.
+    """
+
+    _BASE_TO_INT = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    _INT_TO_BASE = {0: 'A', 1: 'C', 2: 'G', 3: 'T'}
+    _COMP_INT = {0: 3, 1: 2, 2: 1, 3: 0}  # A<->T, C<->G
+
+    @staticmethod
+    def _motif_to_int(motif: str) -> int:
+        """Encode motif as integer (2 bits per base) for fast comparison."""
+        val = 0
+        for ch in motif:
+            val = (val << 2) | MotifUtils._BASE_TO_INT.get(ch, 0)
+        return val
+
+    @staticmethod
+    def _int_to_motif(val: int, length: int) -> str:
+        """Decode integer back to motif string."""
+        chars = []
+        for _ in range(length):
+            chars.append(MotifUtils._INT_TO_BASE[val & 3])
+            val >>= 2
+        return ''.join(reversed(chars))
+
+    @staticmethod
+    def _rotate_int(val: int, length: int) -> int:
+        """Rotate 2-bit encoded motif left by 1 position."""
+        top = (val >> (2 * (length - 1))) & 3
+        mask = (1 << (2 * length)) - 1
+        return ((val << 2) | top) & mask
+
+    @staticmethod
+    def _revcomp_int(val: int, length: int) -> int:
+        """Reverse complement of 2-bit encoded motif."""
+        result = 0
+        for _ in range(length):
+            base = val & 3
+            result = (result << 2) | MotifUtils._COMP_INT[base]
+            val >>= 2
+        return result
 
     @staticmethod
     def get_canonical_motif(motif: str) -> str:
-        """Get lexicographically smallest rotation of motif."""
+        """Get lexicographically smallest rotation of motif.
+
+        Uses integer encoding for motifs <= 32bp for fast comparison.
+        """
         if not motif:
             return motif
+        n = len(motif)
 
+        # Use integer encoding for short motifs (up to 32bp fits in 64-bit int)
+        if n <= 32 and all(c in 'ACGT' for c in motif):
+            val = MotifUtils._motif_to_int(motif)
+            best = val
+            current = val
+            for _ in range(n - 1):
+                current = MotifUtils._rotate_int(current, n)
+                if current < best:
+                    best = current
+            return MotifUtils._int_to_motif(best, n)
+
+        # Fallback for long or non-standard motifs
         rotations = [motif[i:] + motif[:i] for i in range(len(motif))]
         return min(rotations)
 
@@ -25,7 +85,9 @@ class MotifUtils:
 
     @staticmethod
     def get_canonical_motif_stranded(motif: str) -> Tuple[str, str]:
-        """Get canonical motif considering both strands.
+        """Get canonical motif considering both strands (rotation + revcomp).
+
+        Uses integer encoding (inspired by STRling) for motifs <= 32bp.
 
         Returns:
             (canonical_motif, strand) where strand is '+' or '-'
@@ -33,16 +95,42 @@ class MotifUtils:
         if not motif:
             return motif, '+'
 
-        # Get all rotations of forward strand
-        forward_rotations = [motif[i:] + motif[:i] for i in range(len(motif))]
+        n = len(motif)
+
+        # Fast path: integer encoding for short ACGT-only motifs
+        if n <= 32 and all(c in 'ACGT' for c in motif):
+            val = MotifUtils._motif_to_int(motif)
+
+            # Find min rotation of forward strand
+            fwd_best = val
+            current = val
+            for _ in range(n - 1):
+                current = MotifUtils._rotate_int(current, n)
+                if current < fwd_best:
+                    fwd_best = current
+
+            # Find min rotation of reverse complement
+            rc_val = MotifUtils._revcomp_int(val, n)
+            rc_best = rc_val
+            current = rc_val
+            for _ in range(n - 1):
+                current = MotifUtils._rotate_int(current, n)
+                if current < rc_best:
+                    rc_best = current
+
+            if fwd_best <= rc_best:
+                return MotifUtils._int_to_motif(fwd_best, n), '+'
+            else:
+                return MotifUtils._int_to_motif(rc_best, n), '-'
+
+        # Fallback for long or non-standard motifs
+        forward_rotations = [motif[i:] + motif[:i] for i in range(n)]
         forward_canonical = min(forward_rotations)
 
-        # Get all rotations of reverse complement
         rc = MotifUtils.reverse_complement(motif)
-        rc_rotations = [rc[i:] + rc[:i] for i in range(len(rc))]
+        rc_rotations = [rc[i:] + rc[:i] for i in range(n)]
         rc_canonical = min(rc_rotations)
 
-        # Return lexicographically smallest
         if forward_canonical <= rc_canonical:
             return forward_canonical, '+'
         else:
