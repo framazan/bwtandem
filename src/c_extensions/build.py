@@ -2,7 +2,7 @@
 import os
 import sys
 import ctypes
-from ctypes import c_int, c_double, c_char_p, POINTER
+from ctypes import c_int, c_double, POINTER
 
 _EXT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,7 +34,9 @@ def build():
     """Compile all C extensions."""
     ok = _compile('tier1_scan.c', 'tier1_scan')
     ok2 = _compile('tier2_accel.c', 'tier2_accel')
-    return ok and ok2
+    ok3 = _compile('align_accel.c', 'align_accel')
+    ok4 = _compile('bwt_accel.c', 'bwt_accel')
+    return ok and ok2 and ok3 and ok4
 
 
 def load():
@@ -109,6 +111,112 @@ def load_tier2():
         return lib
     except OSError as e:
         print(f"Failed to load Tier 2 C extension: {e}", file=sys.stderr)
+        return None
+
+
+def load_bwt():
+    """Load the BWT acceleration C library, building if necessary."""
+    lib_path = _lib_path('bwt_accel')
+    if not os.path.exists(lib_path):
+        if not build():
+            return None
+    try:
+        lib = ctypes.CDLL(lib_path)
+
+        lib.count_equal_range.restype = c_int
+        lib.count_equal_range.argtypes = [
+            ctypes.POINTER(ctypes.c_ubyte), c_int, c_int, c_int
+        ]
+
+        lib.backward_search.restype = c_int
+        lib.backward_search.argtypes = [
+            ctypes.POINTER(ctypes.c_ubyte),  # bwt
+            c_int,                            # n
+            ctypes.POINTER(ctypes.c_ubyte),  # pattern
+            c_int,                            # pat_len
+            ctypes.POINTER(c_int),           # char_counts[256]
+            ctypes.POINTER(c_int),           # char_totals[256]
+            ctypes.POINTER(c_int),           # checkpoints_flat
+            ctypes.POINTER(c_int),           # cp_offsets[256]
+            ctypes.POINTER(c_int),           # cp_lengths[256]
+            c_int,                            # sample_rate
+            ctypes.POINTER(c_int),           # out_sp
+            ctypes.POINTER(c_int),           # out_ep
+        ]
+
+        lib.batch_backward_search.restype = None
+        lib.batch_backward_search.argtypes = [
+            ctypes.POINTER(ctypes.c_ubyte),  # bwt
+            c_int,                            # n
+            ctypes.POINTER(ctypes.c_ubyte),  # patterns (concatenated)
+            ctypes.POINTER(c_int),           # pat_offsets
+            ctypes.POINTER(c_int),           # pat_lengths
+            c_int,                            # n_patterns
+            ctypes.POINTER(c_int),           # char_counts[256]
+            ctypes.POINTER(c_int),           # char_totals[256]
+            ctypes.POINTER(c_int),           # checkpoints_flat
+            ctypes.POINTER(c_int),           # cp_offsets[256]
+            ctypes.POINTER(c_int),           # cp_lengths[256]
+            c_int,                            # sample_rate
+            ctypes.POINTER(c_int),           # out_sps
+            ctypes.POINTER(c_int),           # out_eps
+        ]
+
+        lib.kasai_lcp.restype = None
+        lib.kasai_lcp.argtypes = [
+            ctypes.POINTER(ctypes.c_ubyte),  # text_codes
+            ctypes.POINTER(c_int),           # sa
+            c_int,                            # n
+            ctypes.POINTER(c_int),           # lcp_out
+        ]
+
+        return lib
+    except OSError as e:
+        print(f"Failed to load bwt_accel C extension: {e}", file=sys.stderr)
+        return None
+
+
+def load_align():
+    """Load the alignment acceleration C library, building if necessary."""
+    lib_path = _lib_path('align_accel')
+    if not os.path.exists(lib_path):
+        if not build():
+            return None
+    try:
+        lib = ctypes.CDLL(lib_path)
+
+        # AlignRegionResult struct layout: 5 ints + 1 double + padding
+        class AlignRegionResult(ctypes.Structure):
+            _fields_ = [
+                ('copies', c_int),
+                ('consumed_length', c_int),
+                ('total_mismatches', c_int),
+                ('total_insertions', c_int),
+                ('total_deletions', c_int),
+                ('max_errors_per_copy', c_int),
+                ('mismatch_rate', c_double),
+            ]
+
+        lib.AlignRegionResult = AlignRegionResult
+
+        lib.align_repeat_region_c.restype = c_int
+        lib.align_repeat_region_c.argtypes = [
+            ctypes.POINTER(ctypes.c_ubyte),  # text
+            c_int,                            # text_len
+            c_int,                            # start
+            c_int,                            # end
+            ctypes.POINTER(ctypes.c_ubyte),  # motif
+            c_int,                            # motif_len
+            c_double,                         # mismatch_frac
+            c_int,                            # max_indel
+            c_int,                            # min_copies
+            ctypes.POINTER(AlignRegionResult), # out
+            ctypes.POINTER(ctypes.c_ubyte),  # consensus_out
+        ]
+
+        return lib
+    except OSError as e:
+        print(f"Failed to load align_accel C extension: {e}", file=sys.stderr)
         return None
 
 
