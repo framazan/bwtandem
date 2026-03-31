@@ -4,7 +4,6 @@ from typing import List, Tuple, Set, Optional
 from .models import TandemRepeat
 from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
-from .accelerators import extend_with_mismatches
 from .bwt_seed import bwt_kmer_seed_scan
 
 
@@ -88,11 +87,13 @@ class Tier3LongReadFinder:
     """
 
     def __init__(self, bwt_core: BWTCore, min_length: int = 100,
-                 max_length: int = 100000, min_copies: float = 2.0):
+                 max_length: int = 100000, min_copies: float = 2.0,
+                 mode: str = "balanced"):
         self.bwt = bwt_core
         self.min_length = min_length
         self.max_length = max_length
         self.min_copies = min_copies
+        self.mode = mode
 
     def find_long_repeats(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
                           tier2_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
@@ -122,17 +123,33 @@ class Tier3LongReadFinder:
         for start, end in tier2_seen:
             mask[start:min(end, n)] = True
 
+        # Compute adaptive params based on sequence characteristics
+        gc_content = float(np.mean((text_arr == ord('G')) | (text_arr == ord('C'))))
+        coverage_ratio = float(np.mean(mask))
+        params = compute_adaptive_params(
+            seq_len=n,
+            gc_content=gc_content,
+            coverage_ratio=coverage_ratio,
+            min_period=self.min_length,
+            max_period=self.max_length,
+            preset=self.mode,
+        )
+
+        anchor_match_pct = params["anchor_match_pct"]
+        scan_bw_periods = params["scan_backward"]
+        scan_fw_periods = params["scan_forward"]
+
         # ===== Phase A: Shared BWT k-mer seeding =====
         seed_candidates = bwt_kmer_seed_scan(
             bwt=self.bwt,
             min_period=self.min_length,
             max_period=self.max_length,
-            kmer_size=20,          # Long k-mers for uniqueness
-            stride=100,            # Sparse sampling for speed
+            kmer_size=params["kmer_size"],
+            stride=params["stride"],
             min_copies=int(self.min_copies),
-            allowed_mismatch_rate=0.20,
-            tolerance_ratio=0.03,  # 3% tolerance for long repeats
-            max_occurrences=500,   # Aggressive cap for Tier 3
+            allowed_mismatch_rate=params["allowed_mismatch_rate"],
+            tolerance_ratio=params["tolerance_ratio"],
+            max_occurrences=params["max_occurrences"],
             covered_mask=mask,
             show_progress=False,
             label=f"{chromosome} Tier3",
@@ -165,13 +182,13 @@ class Tier3LongReadFinder:
                 true_start = cand.seed_pos
                 true_end = cand.seed_pos + period
 
-                scan_start = max(0, cand.seed_pos - period * 50)
+                scan_start = max(0, cand.seed_pos - period * scan_bw_periods)
                 pos = cand.seed_pos - period
                 while pos >= scan_start:
                     window = text_arr[pos:pos + period]
                     if window.size == period:
                         matches = np.sum(window == motif_arr)
-                        if matches / period >= 0.75:
+                        if matches / period >= anchor_match_pct:
                             true_start = pos
                             pos -= period
                         else:
@@ -180,13 +197,13 @@ class Tier3LongReadFinder:
                         break
 
                 # Scan forward from seed to find true end
-                scan_end = min(n, cand.seed_pos + period * 600)
+                scan_end = min(n, cand.seed_pos + period * scan_fw_periods)
                 pos = cand.seed_pos + period
                 while pos + period <= scan_end:
                     window = text_arr[pos:pos + period]
                     if window.size == period:
                         matches = np.sum(window == motif_arr)
-                        if matches / period >= 0.75:
+                        if matches / period >= anchor_match_pct:
                             true_end = pos + period
                             pos += period
                         else:
