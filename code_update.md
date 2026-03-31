@@ -51,3 +51,15 @@
 - TRF: Fastest (34 sec), high precision
 - mreps: Over-detection (84K), filtering required
 - ULTRA: Slowest (24 min), 3.5x more results than bwtandem
+
+## Step 7: Tier 2 C Extension Acceleration (Complete)
+- **Change**: C extension for `smallest_period_str` + coverage-skip optimization + stride tuning
+- **Key modifications**:
+  - `src/c_extensions/tier2_accel.c`: C implementations of `smallest_period_str`, `smallest_period_str_approx`, `hamming_distance`, `batch_process_lcp_candidates`
+  - Python `smallest_period_str` calls replaced with C ctypes calls in hot loops
+  - O(n²) dedup check replaced with O(1) coverage mask check
+  - Phase B stride increased from min 3 to min 5
+  - Coverage-based early skip for overlapping candidates
+- **Result**: Tier 2 reduced from 245s to 117s (2.1x speedup)
+- **Overall**: Chr4 total 472s → 317s (1.5x speedup, 5 min 17 sec)
+- **Accuracy**: 11/11 tests passed, 100% sensitivity / 100% precision maintained
