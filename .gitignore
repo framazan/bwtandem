@@ -11,4 +11,3 @@ src/__pycache__
 *.dat
 *.mask
 .vscode
-/results
