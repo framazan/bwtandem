@@ -7,42 +7,42 @@ Used by both Tier 2 and Tier 3.  The algorithm is:
   4. Extend seed positions with mismatch tolerance.
   5. Return raw candidate regions for tier-specific post-processing.
 """
-from __future__ import annotations  # 파이썬 3.9 이하에서도 타입 힌트 문자열 형식 사용 허용
+from __future__ import annotations  # Allow string-form type hints for Python 3.9 and below
 
-from dataclasses import dataclass   # 불변 데이터 컨테이너 정의를 위한 데코레이터
-from typing import List, Optional, Set, Tuple  # 타입 힌트용 제네릭 타입들
+from dataclasses import dataclass   # Decorator for defining immutable data containers
+from typing import List, Optional, Set, Tuple  # Generic types for type hints
 
-import numpy as np  # 배열 연산 및 수치 계산을 위한 NumPy
+import numpy as np  # NumPy for array operations and numerical computation
 
 from .accelerators import extend_with_mismatches, find_periodic_runs, find_tandem_runs
-# Cython/Python 가속 함수: 미스매치 허용 확장, 주기적 런 탐지, 탄뎀 런 탐지
-from .bwt_core import BWTCore  # FM-인덱스 핵심 모듈 (BWT, backward_search, locate_positions 등)
+# Cython/Python accelerated functions: mismatch-tolerant extension, periodic run detection, tandem run detection
+from .bwt_core import BWTCore  # FM-index core module (BWT, backward_search, locate_positions, etc.)
 
 
 @dataclass
 class SeedCandidate:
     """A raw repeat candidate from BWT seeding."""
-    start: int      # 확장 후 반복 배열의 시작 위치 (0-based)
-    end: int        # 확장 후 반복 배열의 끝 위치 (0-based)
-    period: int     # 탐지된 반복 단위 길이 (bp)
-    copies: int     # 탐지된 복사 수
-    motif: str      # 대표 모티프 문자열 (full_start 위치에서 추출)
-    seed_pos: int   # 이 후보를 생성한 원본 시드 위치 (i 값)
+    start: int      # Start position of the repeat array after extension (0-based)
+    end: int        # End position of the repeat array after extension (0-based)
+    period: int     # Detected repeat unit length (bp)
+    copies: int     # Detected number of copies
+    motif: str      # Representative motif string (extracted from full_start position)
+    seed_pos: int   # Original seed position that generated this candidate (value of i)
 
 
 def bwt_kmer_seed_scan(
-    bwt: BWTCore,                        # FM-인덱스 객체
-    min_period: int,                     # 탐지할 최소 반복 단위 길이
-    max_period: int,                     # 탐지할 최대 반복 단위 길이
-    kmer_size: int = 16,                 # 샘플링할 k-mer 길이 (기본값 16bp)
-    stride: int = 50,                    # k-mer 샘플링 간격 (기본값 50bp)
-    min_copies: int = 2,                 # 반복으로 인정하기 위한 최소 복사 수
-    allowed_mismatch_rate: float = 0.20, # 확장 시 허용 미스매치 비율 (0.0~0.5)
-    tolerance_ratio: float = 0.03,       # 주기 탐지 시 간격 오차 허용 비율 (기본 3%)
-    max_occurrences: int = 5000,         # k-mer 최대 발생 횟수 (초과 시 저복잡 서열로 간주하고 스킵)
-    covered_mask: Optional[np.ndarray] = None,  # 이전 티어에서 이미 발견된 위치 마스크
-    show_progress: bool = False,         # 진행 상황 출력 여부
-    label: str = "",                     # 진행 메시지에 붙일 레이블 문자열
+    bwt: BWTCore,                        # FM-index object
+    min_period: int,                     # Minimum repeat unit length to detect
+    max_period: int,                     # Maximum repeat unit length to detect
+    kmer_size: int = 16,                 # Length of k-mers to sample (default 16 bp)
+    stride: int = 50,                    # K-mer sampling interval (default 50 bp)
+    min_copies: int = 2,                 # Minimum number of copies to qualify as a repeat
+    allowed_mismatch_rate: float = 0.20, # Allowed mismatch rate during extension (0.0-0.5)
+    tolerance_ratio: float = 0.03,       # Tolerance ratio for period jitter in periodic run detection (default 3%)
+    max_occurrences: int = 5000,         # Maximum k-mer occurrence count (skip if exceeded, likely low-complexity)
+    covered_mask: Optional[np.ndarray] = None,  # Boolean mask of positions already found by previous tiers
+    show_progress: bool = False,         # Whether to print progress
+    label: str = "",                     # Label string for progress messages
 ) -> List[SeedCandidate]:
     """BWT k-mer seeding scan for tandem repeat candidates.
 
@@ -83,73 +83,73 @@ def bwt_kmer_seed_scan(
         Raw repeat candidates.  Callers perform tier-specific post-processing
         (primitive period reduction, HOR detection, DP refinement, etc.).
     """
-    text_arr = bwt.text_arr  # BWT에 사용된 원본 서열 (numpy uint8 배열)
-    n = int(text_arr.size)   # 서열 전체 길이 (센티넬 '$' 포함 가능)
+    text_arr = bwt.text_arr  # Original sequence used for BWT (numpy uint8 array)
+    n = int(text_arr.size)   # Total sequence length (may include sentinel '$')
 
-    # BWT 구성에 사용된 센티넬 문자('$', ASCII 36) 제외: 마지막 문자가 '$'이면 n 감소
+    # Exclude the sentinel character ('$', ASCII 36) used for BWT construction
     if n > 0 and text_arr[n - 1] == 36:   # '$'
-        n -= 1  # 센티넬을 제외하고 실제 서열 길이만 사용
+        n -= 1  # Use actual sequence length excluding sentinel
 
-    # 서열이 너무 짧아 최소 복사 수를 충족하는 반복을 포함할 수 없으면 즉시 반환
+    # Return immediately if sequence is too short to contain repeats meeting minimum copy count
     if n < min_period * min_copies:
         return []
 
-    # k-mer 크기가 min_period보다 크면 한 복사 안에 k-mer가 들어가지 않으므로 clamp
-    effective_kmer = min(kmer_size, min_period)  # 반복 단위 길이를 초과하지 않도록 제한
+    # Clamp k-mer size if larger than min_period (k-mer must fit within one copy)
+    effective_kmer = min(kmer_size, min_period)  # Limit to not exceed repeat unit length
     if effective_kmer < 6:
-        effective_kmer = min(6, min_period)  # 최소 6bp: 너무 짧으면 FM-인덱스 히트가 폭발적으로 증가함
+        effective_kmer = min(6, min_period)  # Minimum 6 bp: shorter k-mers cause explosive FM-index hits
 
-    candidates: List[SeedCandidate] = []               # 탐지된 반복 후보 목록
-    seen_regions: Set[Tuple[int, int]] = set()         # 중복 후보 제거용 (start//bucket, period) 키 집합
-    seen_kmers: Set[str] = set()                       # 이미 FM-인덱스에서 조회한 k-mer 집합 (재조회 방지)
-    bwt_queries = 0  # FM-인덱스 조회 횟수 카운터 (진행 상황 보고용)
+    candidates: List[SeedCandidate] = []               # List of detected repeat candidates
+    seen_regions: Set[Tuple[int, int]] = set()         # Set of (start//bucket, period) keys for duplicate removal
+    seen_kmers: Set[str] = set()                       # Set of already-queried k-mers (avoid re-querying)
+    bwt_queries = 0  # FM-index query counter (for progress reporting)
 
-    i = 0  # 현재 샘플링 위치 (stride씩 증가)
-    while i < n - effective_kmer:  # 서열 끝에서 k-mer가 잘리지 않는 범위까지 반복
-        # 이전 티어에서 발견된 위치는 시드로 사용하지 않고 건너뜀
+    i = 0  # Current sampling position (incremented by stride)
+    while i < n - effective_kmer:  # Iterate until k-mer would be truncated at sequence end
+        # Skip positions already found by previous tiers
         if covered_mask is not None and covered_mask[i]:
-            i += stride  # 해당 위치는 이미 커버됨 → 다음 샘플 위치로 이동
+            i += stride  # Position already covered; move to next sample position
             continue
 
-        # 현재 위치에서 k-mer 추출
-        kmer_arr = text_arr[i:i + effective_kmer]  # k-mer에 해당하는 서열 슬라이스
-        kmer_str = kmer_arr.tobytes().decode('ascii', errors='replace')  # 바이트 배열을 문자열로 변환
+        # Extract k-mer at current position
+        kmer_arr = text_arr[i:i + effective_kmer]  # Sequence slice for the k-mer
+        kmer_str = kmer_arr.tobytes().decode('ascii', errors='replace')  # Convert byte array to string
 
-        # 이미 조회한 k-mer이거나 비-DNA 염기 포함 시 건너뜀
-        if kmer_str in seen_kmers:  # 동일한 k-mer를 중복 조회하지 않도록 캐시 확인
+        # Skip if k-mer was already queried or contains non-DNA bases
+        if kmer_str in seen_kmers:  # Check cache to avoid duplicate queries
             i += stride
             continue
-        if not all(c in 'ACGT' for c in kmer_str):  # N, 소문자 등 비-DNA 문자 포함 시 스킵
+        if not all(c in 'ACGT' for c in kmer_str):  # Skip if contains N, lowercase, or other non-DNA characters
             i += stride
             continue
-        seen_kmers.add(kmer_str)  # 조회한 k-mer를 캐시에 등록
+        seen_kmers.add(kmer_str)  # Register queried k-mer in cache
 
-        # --- FM-인덱스(BWT backward search)로 k-mer의 모든 발생 위치 조회 ---
-        bwt_queries += 1  # FM-인덱스 조회 횟수 증가
-        sp, ep = bwt.backward_search(kmer_str)  # suffix array 범위 [sp, ep] 반환
-        if sp == -1:  # 발견 안 됨 (이론상 발생하지 않아야 하지만 방어 코드)
+        # --- Query all occurrence positions of k-mer via FM-index (BWT backward search) ---
+        bwt_queries += 1  # Increment FM-index query counter
+        sp, ep = bwt.backward_search(kmer_str)  # Returns suffix array range [sp, ep]
+        if sp == -1:  # Not found (should not happen in theory, but defensive check)
             i += stride
             continue
 
-        occ_count = ep - sp + 1  # k-mer의 총 발생 횟수 계산
+        occ_count = ep - sp + 1  # Calculate total occurrence count of the k-mer
         if occ_count < min_copies or occ_count > max_occurrences:
-            # 발생 횟수가 너무 적으면(반복 없음) 또는 너무 많으면(저복잡 서열) 스킵
+            # Skip if too few occurrences (no repeat) or too many (low-complexity sequence)
             i += stride
             continue
 
-        positions = bwt.locate_positions(kmer_str)  # k-mer가 발생한 모든 위치 목록 반환
-        if len(positions) < min_copies:  # 실제 위치 수가 최소 복사 수 미달이면 스킵
+        positions = bwt.locate_positions(kmer_str)  # Return all positions where k-mer occurs
+        if len(positions) < min_copies:  # Skip if actual position count is below minimum copies
             i += stride
             continue
 
-        # --- 발생 위치 배열에서 등차수열(주기적 런) 탐지 ---
-        pos_arr = np.array(sorted(positions), dtype=np.int64)  # 위치를 정렬된 int64 배열로 변환
-        # (정렬해야 등차수열 패턴 탐지가 정확히 작동함)
+        # --- Detect arithmetic progressions (periodic runs) in occurrence position array ---
+        pos_arr = np.array(sorted(positions), dtype=np.int64)  # Convert positions to sorted int64 array
+        # (Sorting is required for accurate arithmetic progression detection)
 
-        # find_periodic_runs: 위치 배열에서 허용 오차(tolerance_ratio) 내의 등간격 그룹 탐지
+        # find_periodic_runs: detect evenly-spaced groups within tolerance_ratio in position array
         patterns = find_periodic_runs(
             pos_arr, min_period, max_period, min_copies, tolerance_ratio
-        )  # 반환: [(run_start, run_end, period), ...] — 주기적 k-mer 발생 런 목록
+        )  # Returns: [(run_start, run_end, period), ...] -- list of periodic k-mer occurrence runs
 
         for run_start, run_end, period in patterns:  # 각 주기적 런에 대해 처리
             run_start = int(run_start)  # numpy 타입을 파이썬 int로 변환

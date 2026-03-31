@@ -1,81 +1,81 @@
-import math  # 수학 함수(log10 등) 사용을 위한 표준 라이브러리
-import numpy as np  # 배열 연산 및 수치 계산을 위한 NumPy
-from typing import List, Tuple, Set, Optional  # 타입 힌트를 위한 typing 모듈
-from .models import TandemRepeat  # 반복 서열 결과를 담는 데이터 클래스
-from .motif_utils import MotifUtils  # 모티프 분석 유틸리티 (정렬, 컨센서스, TRF 통계 등)
-from .bwt_core import BWTCore  # FM-인덱스 핵심 모듈 (BWT, 역방향 탐색 등)
-from .accelerators import anchor_scan_boundaries  # Cython 가속: 앵커 기반 경계 검증
-from .bwt_seed import bwt_kmer_seed_scan  # 공유 BWT k-mer 시딩 파이프라인
+import math  # Standard library for math functions (log10, etc.)
+import numpy as np  # NumPy for array operations and numerical computation
+from typing import List, Tuple, Set, Optional  # typing module for type hints
+from .models import TandemRepeat  # Data class for tandem repeat results
+from .motif_utils import MotifUtils  # Motif analysis utilities (alignment, consensus, TRF statistics, etc.)
+from .bwt_core import BWTCore  # FM-index core module (BWT, backward search, etc.)
+from .accelerators import anchor_scan_boundaries  # Cython-accelerated anchor-based boundary verification
+from .bwt_seed import bwt_kmer_seed_scan  # Shared BWT k-mer seeding pipeline
 
 
 def compute_adaptive_params(
-    seq_len: int,        # 입력 서열 길이 (bp)
-    gc_content: float,   # GC 함량 (0~1 범위)
-    coverage_ratio: float,  # 이미 다른 티어에서 발견된 영역 비율
-    min_period: int,     # 최소 반복 단위 길이
-    max_period: int,     # 최대 반복 단위 길이
-    preset: str = "balanced",  # 속도/민감도 프리셋 ("fast", "balanced", "sensitive")
+    seq_len: int,        # Input sequence length (bp)
+    gc_content: float,   # GC content (range 0 to 1)
+    coverage_ratio: float,  # Fraction of sequence already covered by other tiers
+    min_period: int,     # Minimum repeat unit length
+    max_period: int,     # Maximum repeat unit length
+    preset: str = "balanced",  # Speed/sensitivity preset ("fast", "balanced", "sensitive")
 ) -> dict:
     """Compute adaptive Tier 3 parameters based on input characteristics."""
-    # 프리셋별 속도 가중치 정의: fast=빠름(민감도 낮음), sensitive=느림(민감도 높음)
+    # Speed weight per preset: fast=faster (lower sensitivity), sensitive=slower (higher sensitivity)
     speed_weights = {"fast": 0.8, "balanced": 0.5, "sensitive": 0.2}
-    speed_weight = speed_weights.get(preset, 0.5)  # 프리셋에 해당하는 가중치 추출 (없으면 기본 0.5)
-    speed_factor = speed_weight / 0.5  # balanced(0.5) 대비 상대적 속도 배율 계산
+    speed_weight = speed_weights.get(preset, 0.5)  # Extract weight for the preset (default 0.5 if not found)
+    speed_factor = speed_weight / 0.5  # Relative speed multiplier compared to balanced (0.5)
 
-    # 연속 함수 기반의 기본 파라미터 계산 (서열 길이에 따라 로그 스케일로 조정)
-    safe_seq = max(seq_len, 1)  # 0으로 나누기 방지를 위한 하한값 적용
+    # Compute base parameters using continuous functions (log-scaled by sequence length)
+    safe_seq = max(seq_len, 1)  # Lower bound to prevent division by zero
 
-    base_kmer = int(10 + 6 * math.log10(max(safe_seq / 1e5, 1)))  # k-mer 크기: 서열이 길수록 더 큰 k-mer 사용
-    base_stride = int(safe_seq / 40000)  # 샘플링 간격: 서열 길이에 비례
-    base_max_occ = int(safe_seq / 30000)  # 최대 허용 k-mer 발생 횟수: 고반복 저복잡 서열 제외용
-    base_scan_bw = int(50 * safe_seq / 1e8)  # 역방향 스캔 범위 (반복 단위 수)
-    base_scan_fw = int(600 * safe_seq / 1e8)  # 순방향 스캔 범위 (반복 단위 수)
+    base_kmer = int(10 + 6 * math.log10(max(safe_seq / 1e5, 1)))  # k-mer size: larger k-mers for longer sequences
+    base_stride = int(safe_seq / 40000)  # Sampling stride: proportional to sequence length
+    base_max_occ = int(safe_seq / 30000)  # Max allowed k-mer occurrences: filters out low-complexity high-frequency k-mers
+    base_scan_bw = int(50 * safe_seq / 1e8)  # Backward scan range (in repeat units)
+    base_scan_fw = int(600 * safe_seq / 1e8)  # Forward scan range (in repeat units)
 
-    # 정확도 파라미터: 프리셋에 영향받지 않고 서열 특성에만 의존
-    allowed_mismatch_rate = 0.15 + 0.10 * abs(gc_content - 0.5)  # GC가 극단적일수록 미스매치 허용률 증가
-    tolerance_ratio = 0.02 + 0.02 * (max_period / 100000)  # 반복 주기 최대값이 클수록 주기 오차 허용 증가
-    anchor_match_pct = 0.70 + 0.10 * (1 - coverage_ratio)  # 커버리지가 낮을수록 앵커 매칭 기준 완화
+    # Accuracy parameters: depend only on sequence characteristics, not preset
+    allowed_mismatch_rate = 0.15 + 0.10 * abs(gc_content - 0.5)  # Higher mismatch tolerance for extreme GC content
+    tolerance_ratio = 0.02 + 0.02 * (max_period / 100000)  # Wider period tolerance for larger max periods
+    anchor_match_pct = 0.70 + 0.10 * (1 - coverage_ratio)  # Relax anchor matching threshold when coverage is low
 
-    # 속도 파라미터에 프리셋 배율 적용
-    kmer_size = int(base_kmer + (speed_factor - 1) * 2)  # fast 모드는 k-mer 크기 증가 (더 적은 히트)
-    stride = int(base_stride * speed_factor)  # fast 모드는 더 큰 간격으로 드물게 샘플링
-    max_occurrences = int(base_max_occ / speed_factor)  # fast 모드는 고발생 k-mer 더 적게 허용
-    scan_backward = int(base_scan_bw / speed_factor)  # fast 모드는 더 짧게 역방향 스캔
-    scan_forward = int(base_scan_fw / speed_factor)  # fast 모드는 더 짧게 순방향 스캔
+    # Apply preset multiplier to speed parameters
+    kmer_size = int(base_kmer + (speed_factor - 1) * 2)  # Fast mode increases k-mer size (fewer hits)
+    stride = int(base_stride * speed_factor)  # Fast mode uses larger stride for sparser sampling
+    max_occurrences = int(base_max_occ / speed_factor)  # Fast mode allows fewer high-frequency k-mers
+    scan_backward = int(base_scan_bw / speed_factor)  # Fast mode scans shorter backward range
+    scan_forward = int(base_scan_fw / speed_factor)  # Fast mode scans shorter forward range
 
-    # 커버리지가 50% 초과 시 stride를 줄여 미탐지 영역을 더 세밀하게 탐색
+    # When coverage exceeds 50%, reduce stride to scan uncovered regions more finely
     if coverage_ratio > 0.5:
-        stride = int(stride * (1 - 0.5 * coverage_ratio))  # 커버리지가 높을수록 stride 감소
+        stride = int(stride * (1 - 0.5 * coverage_ratio))  # Higher coverage leads to smaller stride
 
-    # 서열 크기 구간별 전략 조정
-    if safe_seq > 100_000_000:  # 100 Mbp 초과: 대형 염색체 모드
-        stride = max(stride, 150)  # 너무 느려지지 않도록 stride 최솟값 보장
-        kmer_size = max(kmer_size, 20)  # 대형 서열에서는 더 긴 k-mer로 특이성 확보
-        max_occurrences = min(max_occurrences, 500)  # 저복잡 반복을 걸러내기 위해 상한 강화
-    elif safe_seq < 100_000:  # 100 kbp 미만: 마이크로 모드 (짧은 서열)
-        stride = max(stride, 20)  # 짧은 서열에서도 최소한의 샘플링 간격 유지
-        kmer_size = max(kmer_size, 12)  # 짧은 서열에는 최소 k-mer 크기 보장
+    # Strategy adjustments by sequence size range
+    if safe_seq > 100_000_000:  # Over 100 Mbp: large chromosome mode
+        stride = max(stride, 150)  # Ensure minimum stride to avoid excessive slowdown
+        kmer_size = max(kmer_size, 20)  # Use longer k-mers for specificity on large sequences
+        max_occurrences = min(max_occurrences, 500)  # Tighten upper bound to filter low-complexity repeats
+    elif safe_seq < 100_000:  # Under 100 kbp: micro mode (short sequences)
+        stride = max(stride, 20)  # Maintain minimum sampling stride even for short sequences
+        kmer_size = max(kmer_size, 12)  # Ensure minimum k-mer size for short sequences
 
-    # 모든 파라미터를 허용 범위 내로 클램핑
-    kmer_size = max(12, min(28, kmer_size))  # k-mer 크기: 12~28 bp 범위로 제한
-    stride = max(20, min(300, stride))  # 샘플링 간격: 20~300 범위로 제한
-    allowed_mismatch_rate = max(0.15, min(0.20, allowed_mismatch_rate))  # 미스매치율: 15%~20% 범위
-    tolerance_ratio = max(0.02, min(0.04, tolerance_ratio))  # 주기 오차율: 2%~4% 범위
-    max_occurrences = max(200, min(1500, max_occurrences))  # 최대 발생 횟수: 200~1500 범위
-    anchor_match_pct = max(0.70, min(0.80, anchor_match_pct))  # 앵커 매칭 비율: 70%~80% 범위
-    scan_backward = max(20, min(80, scan_backward))  # 역방향 스캔: 20~80 단위 범위
-    scan_forward = max(200, min(800, scan_forward))  # 순방향 스캔: 200~800 단위 범위
+    # Clamp all parameters to allowed ranges
+    kmer_size = max(12, min(28, kmer_size))  # k-mer size: restricted to 12-28 bp
+    stride = max(20, min(300, stride))  # Sampling stride: restricted to 20-300
+    allowed_mismatch_rate = max(0.15, min(0.20, allowed_mismatch_rate))  # Mismatch rate: 15%-20%
+    tolerance_ratio = max(0.02, min(0.04, tolerance_ratio))  # Period tolerance: 2%-4%
+    max_occurrences = max(200, min(1500, max_occurrences))  # Max occurrences: 200-1500
+    anchor_match_pct = max(0.70, min(0.80, anchor_match_pct))  # Anchor match ratio: 70%-80%
+    scan_backward = max(20, min(80, scan_backward))  # Backward scan: 20-80 units
+    scan_forward = max(200, min(800, scan_forward))  # Forward scan: 200-800 units
 
-    # 최종 파라미터를 딕셔너리로 반환
+    # Return final parameters as a dictionary
     return {
-        "kmer_size": kmer_size,              # FM-인덱스 조회에 사용할 k-mer 길이
-        "stride": stride,                    # k-mer 샘플링 간격
-        "allowed_mismatch_rate": allowed_mismatch_rate,  # 확장 시 허용 미스매치 비율
-        "tolerance_ratio": tolerance_ratio,  # 주기 탐지 허용 오차 비율
-        "max_occurrences": max_occurrences,  # k-mer 최대 발생 횟수 (저복잡 필터)
-        "anchor_match_pct": anchor_match_pct,  # 앵커 기반 경계 검증 매칭 임계값
-        "scan_backward": scan_backward,      # 앵커 역방향 스캔 범위 (반복 단위 수)
-        "scan_forward": scan_forward,        # 앵커 순방향 스캔 범위 (반복 단위 수)
+        "kmer_size": kmer_size,              # k-mer length for FM-index lookup
+        "stride": stride,                    # k-mer sampling stride
+        "allowed_mismatch_rate": allowed_mismatch_rate,  # Allowed mismatch rate during extension
+        "tolerance_ratio": tolerance_ratio,  # Period detection tolerance ratio
+        "max_occurrences": max_occurrences,  # Max k-mer occurrences (low-complexity filter)
+        "anchor_match_pct": anchor_match_pct,  # Anchor-based boundary verification match threshold
+        "scan_backward": scan_backward,      # Anchor backward scan range (in repeat units)
+        "scan_forward": scan_forward,        # Anchor forward scan range (in repeat units)
     }
 
 
@@ -91,11 +91,11 @@ class Tier3LongReadFinder:
     def __init__(self, bwt_core: BWTCore, min_length: int = 100,
                  max_length: int = 100000, min_copies: float = 2.0,
                  mode: str = "balanced"):
-        self.bwt = bwt_core          # FM-인덱스 객체 저장 (이후 탐색에 사용)
-        self.min_length = min_length  # 탐지할 최소 반복 단위 길이 (bp)
-        self.max_length = max_length  # 탐지할 최대 반복 단위 길이 (bp)
-        self.min_copies = min_copies  # 반복으로 인정하기 위한 최소 복사 수
-        self.mode = mode             # 속도/민감도 프리셋 문자열
+        self.bwt = bwt_core          # Store FM-index object (used for subsequent searches)
+        self.min_length = min_length  # Minimum repeat unit length to detect (bp)
+        self.max_length = max_length  # Maximum repeat unit length to detect (bp)
+        self.min_copies = min_copies  # Minimum number of copies required to qualify as a repeat
+        self.mode = mode             # Speed/sensitivity preset string
 
     def find_long_repeats(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
                           tier2_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
@@ -111,23 +111,23 @@ class Tier3LongReadFinder:
         - Anchor-based boundary verification for ultra-long arrays
         - Consensus from sampled copies (not full DP) for efficiency
         """
-        text_arr = self.bwt.text_arr  # BWT에 사용된 원본 서열 (numpy uint8 배열)
-        n = text_arr.size             # 서열 전체 길이 (센티넬 '$' 포함)
+        text_arr = self.bwt.text_arr  # Original sequence used for BWT (numpy uint8 array)
+        n = text_arr.size             # Total sequence length (including sentinel '$')
 
-        # 서열이 너무 짧으면 탐지 불가 → 빈 결과 반환
+        # Sequence too short for detection; return empty results
         if n < self.min_length * 2:
             return []
 
-        # 이전 티어(Tier1, Tier2)가 이미 발견한 영역을 True로 표시하는 불리언 마스크 생성
-        mask = np.zeros(n, dtype=bool)  # 초기에는 모든 위치 미탐지 상태
+        # Create boolean mask marking regions already found by previous tiers
+        mask = np.zeros(n, dtype=bool)  # Initially all positions are uncovered
         for start, end in tier1_seen:
-            mask[start:min(end, n)] = True  # Tier1이 발견한 구간을 마스크에 표시
+            mask[start:min(end, n)] = True  # Mark regions found by Tier 1
         for start, end in tier2_seen:
-            mask[start:min(end, n)] = True  # Tier2가 발견한 구간을 마스크에 표시
+            mask[start:min(end, n)] = True  # Mark regions found by Tier 2
 
-        # 서열 특성 기반 적응형 파라미터 계산
-        gc_content = float(np.mean((text_arr == ord('G')) | (text_arr == ord('C'))))  # GC 함량 계산
-        coverage_ratio = float(np.mean(mask))  # 이미 커버된 영역 비율 계산
+        # Compute adaptive parameters based on sequence characteristics
+        gc_content = float(np.mean((text_arr == ord('G')) | (text_arr == ord('C'))))  # Compute GC content
+        coverage_ratio = float(np.mean(mask))  # Compute fraction of already-covered regions
         params = compute_adaptive_params(
             seq_len=n,
             gc_content=gc_content,
@@ -135,27 +135,27 @@ class Tier3LongReadFinder:
             min_period=self.min_length,
             max_period=self.max_length,
             preset=self.mode,
-        )  # 서열 길이·GC함량·커버리지 등을 반영한 파라미터 딕셔너리
+        )  # Parameter dictionary reflecting sequence length, GC content, coverage, etc.
 
-        anchor_match_pct = params["anchor_match_pct"]  # 앵커 기반 경계 검증 매칭 임계값 추출
-        scan_bw_periods = params["scan_backward"]      # 역방향 앵커 스캔 범위 추출
-        scan_fw_periods = params["scan_forward"]       # 순방향 앵커 스캔 범위 추출
+        anchor_match_pct = params["anchor_match_pct"]  # Extract anchor-based boundary verification match threshold
+        scan_bw_periods = params["scan_backward"]      # Extract backward anchor scan range
+        scan_fw_periods = params["scan_forward"]       # Extract forward anchor scan range
 
-        # ===== Phase A: 공유 BWT k-mer 시딩 파이프라인 실행 =====
+        # ===== Phase A: Run shared BWT k-mer seeding pipeline =====
         seed_candidates = bwt_kmer_seed_scan(
             bwt=self.bwt,
-            min_period=self.min_length,       # 최소 반복 단위 길이
-            max_period=self.max_length,       # 최대 반복 단위 길이
-            kmer_size=params["kmer_size"],    # FM-인덱스 조회에 사용할 k-mer 크기
-            stride=params["stride"],          # k-mer 샘플링 간격
-            min_copies=int(self.min_copies),  # 최소 복사 수 (정수 변환)
-            allowed_mismatch_rate=params["allowed_mismatch_rate"],  # 미스매치 허용률
-            tolerance_ratio=params["tolerance_ratio"],              # 주기 오차 허용률
-            max_occurrences=params["max_occurrences"],              # k-mer 최대 발생 횟수
-            covered_mask=mask,                # 기존 탐지 영역 마스크 (시딩 위치 스킵용)
-            show_progress=False,              # 진행 상황 출력 비활성화
-            label=f"{chromosome} Tier3",      # 진행 메시지용 레이블
-        )  # 반환값: SeedCandidate 리스트 (미가공 반복 후보군)
+            min_period=self.min_length,       # Minimum repeat unit length
+            max_period=self.max_length,       # Maximum repeat unit length
+            kmer_size=params["kmer_size"],    # k-mer size for FM-index lookup
+            stride=params["stride"],          # k-mer sampling stride
+            min_copies=int(self.min_copies),  # Minimum copies (cast to int)
+            allowed_mismatch_rate=params["allowed_mismatch_rate"],  # Mismatch tolerance rate
+            tolerance_ratio=params["tolerance_ratio"],              # Period tolerance ratio
+            max_occurrences=params["max_occurrences"],              # Max k-mer occurrences
+            covered_mask=mask,                # Mask of already-detected regions (skip seeding positions)
+            show_progress=False,              # Disable progress output
+            label=f"{chromosome} Tier3",      # Label for progress messages
+        )  # Returns: list of SeedCandidate objects (raw repeat candidates)
 
         # ===== Tier 3 후처리: 후보를 TandemRepeat 객체로 변환 =====
         repeats = []          # 최종 결과 리스트
