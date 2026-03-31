@@ -1,5 +1,6 @@
 import math
 import os
+import ctypes
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,6 +12,32 @@ from .motif_utils import MotifUtils
 from .bwt_core import BWTCore, _kasai_lcp_uint8
 from .accelerators import hamming_distance, extend_with_mismatches, scan_unit_repeats, scan_simple_repeats, pack_sequence, lcp_tandem_candidates, find_tandem_runs
 from .bwt_seed import bwt_kmer_seed_scan
+
+# Load Tier 2 C acceleration library
+try:
+    from .c_extensions.build import load_tier2 as _load_tier2
+    _c_tier2 = _load_tier2()
+except Exception:
+    _c_tier2 = None
+
+
+def _c_smallest_period_str(motif_bytes: bytes) -> int:
+    """Fast C-accelerated smallest period detection."""
+    if _c_tier2 is None:
+        return MotifUtils.smallest_period_str(motif_bytes.decode('ascii', errors='replace'))
+    n = len(motif_bytes)
+    arr = (ctypes.c_ubyte * n)(*motif_bytes)
+    return _c_tier2.smallest_period_str(arr, n)
+
+
+def _c_smallest_period_str_approx(motif_bytes: bytes, max_error_rate: float = 0.02) -> int:
+    """Fast C-accelerated approximate period detection."""
+    if _c_tier2 is None:
+        return MotifUtils.smallest_period_str_approx(
+            motif_bytes.decode('ascii', errors='replace'), max_error_rate=max_error_rate)
+    n = len(motif_bytes)
+    arr = (ctypes.c_ubyte * n)(*motif_bytes)
+    return _c_tier2.smallest_period_str_approx(arr, n, ctypes.c_double(max_error_rate))
 
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
@@ -288,13 +315,12 @@ class Tier2LCPFinder:
 
                 # Tier 2 post-processing: primitive period reduction
                 motif_arr = text_arr[full_start:full_start + period]
-                motif = motif_arr.tobytes().decode('ascii', errors='replace')
+                motif_bytes = motif_arr.tobytes()
 
-                primitive_period = MotifUtils.smallest_period_str(motif)
-                if primitive_period == len(motif):
-                    primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
-                if primitive_period < len(motif):
-                    motif = motif[:primitive_period]
+                primitive_period = _c_smallest_period_str(motif_bytes)
+                if primitive_period == len(motif_bytes):
+                    primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
+                motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
 
                 repeat = self._refine_and_create_repeat(
                     chromosome, full_start, full_end, motif,
@@ -330,12 +356,11 @@ class Tier2LCPFinder:
 
         fallback_found = 0
         for cand in seed_candidates:
-            motif = cand.motif
-            primitive_period = MotifUtils.smallest_period_str(motif)
-            if primitive_period == len(motif):
-                primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
-            if primitive_period < len(motif):
-                motif = motif[:primitive_period]
+            motif_bytes = cand.motif.encode('ascii', errors='replace')
+            primitive_period = _c_smallest_period_str(motif_bytes)
+            if primitive_period == len(motif_bytes):
+                primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
+            motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
 
             repeat = self._refine_and_create_repeat(
                 chromosome, cand.start, cand.end, motif,
@@ -487,29 +512,28 @@ class Tier2LCPFinder:
                     continue
 
                 motif_arr = s_arr[full_start:full_start + period]
-                motif = motif_arr.tobytes().decode('ascii', errors='replace')
+                motif_bytes = motif_arr.tobytes()
 
-                primitive_period = MotifUtils.smallest_period_str(motif)
-                if primitive_period == len(motif):
-                    primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
-                if primitive_period < len(motif):
-                    motif = motif[:primitive_period]
+                primitive_period = _c_smallest_period_str(motif_bytes)
+                if primitive_period == len(motif_bytes):
+                    primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
+                motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
+
+                # Skip if candidate region already mostly covered
+                cand_span = full_end - full_start
+                if cand_span > 0:
+                    cov_frac = int(np.sum(covered_mask[full_start:min(full_end, n)])) / cand_span
+                    if cov_frac > 0.5:
+                        continue
 
                 repeat = self._refine_and_create_repeat(
                     chromosome, full_start, full_end, motif, tier=2
                 )
                 if repeat:
-                    is_new = True
-                    for s_start, s_end, _ in seen:
-                        if s_start <= repeat.start and s_end >= repeat.end:
-                            is_new = False
-                            break
-                    if is_new:
-                        results.append(repeat)
-                        seen.add((repeat.start, repeat.end, repeat.motif))
-                        covered.add((repeat.start, repeat.end))
-                        covered_mask[repeat.start:min(repeat.end, n)] = True
-                        bwt_found += 1
+                    results.append(repeat)
+                    covered.add((repeat.start, repeat.end))
+                    covered_mask[repeat.start:min(repeat.end, n)] = True
+                    bwt_found += 1
 
         if self.show_progress:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase A found {bwt_found} repeats "
@@ -520,8 +544,8 @@ class Tier2LCPFinder:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase B (BWT k-mer seeding)...", flush=True)
 
         kmer_size = min(10, max(6, min_p - 1))
-        # Dynamic stride: use smaller stride for shorter periods
-        seed_stride = min(10, max(3, min_p // 3))
+        # Dynamic stride: balance speed vs sensitivity
+        seed_stride = min(10, max(5, min_p // 2))
         seed_candidates = bwt_kmer_seed_scan(
             bwt=self.bwt,
             min_period=min_p,
@@ -537,28 +561,27 @@ class Tier2LCPFinder:
 
         fallback_found = 0
         for cand in seed_candidates:
-            motif = cand.motif
-            primitive_period = MotifUtils.smallest_period_str(motif)
-            if primitive_period == len(motif):
-                primitive_period = MotifUtils.smallest_period_str_approx(motif, max_error_rate=0.02)
-            if primitive_period < len(motif):
-                motif = motif[:primitive_period]
+            # Skip candidates that are mostly in already-covered regions
+            cand_len = cand.end - cand.start
+            if cand_len > 0:
+                cov_count = int(np.sum(covered_mask[cand.start:min(cand.end, n)]))
+                if cov_count / cand_len > 0.5:
+                    continue
+
+            motif_bytes = cand.motif.encode('ascii', errors='replace')
+            primitive_period = _c_smallest_period_str(motif_bytes)
+            if primitive_period == len(motif_bytes):
+                primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
+            motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
 
             repeat = self._refine_and_create_repeat(
                 chromosome, cand.start, cand.end, motif, tier=2
             )
             if repeat:
-                is_new = True
-                for s_start, s_end, _ in seen:
-                    if s_start <= repeat.start and s_end >= repeat.end:
-                        is_new = False
-                        break
-                if is_new:
-                    results.append(repeat)
-                    seen.add((repeat.start, repeat.end, repeat.motif))
-                    covered.add((repeat.start, repeat.end))
-                    covered_mask[repeat.start:min(repeat.end, n)] = True
-                    fallback_found += 1
+                results.append(repeat)
+                covered.add((repeat.start, repeat.end))
+                covered_mask[repeat.start:min(repeat.end, n)] = True
+                fallback_found += 1
 
         if self.show_progress:
             print(f"  [{chromosome}] Tier 2 simple scan: Phase B found {fallback_found} additional repeats "

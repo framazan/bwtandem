@@ -603,7 +603,7 @@ Comparison on 5 synthetic test sequences containing 44 planted repeats with know
 
 | Tool | Repeats Found | Runtime |
 |------|---------------|---------|
-| **bwtandem** | **6,625** | 7 min 52 sec |
+| **bwtandem** | **4,777** | 5 min 17 sec |
 | TRF | 4,549 | **34 sec** |
 | mreps | 84,502 | 48 sec |
 | ULTRA | 23,145 | 24 min 11 sec |
@@ -612,11 +612,11 @@ Comparison on 5 synthetic test sequences containing 44 planted repeats with know
 
 | Phase | Time |
 |-------|------|
-| BWT construction | 172 sec |
-| Tier 1 (STR, 1-9 bp) | 11 sec |
-| Tier 2 (medium, ≥10 bp) | 245 sec |
-| Tier 3 (long, ≥100 bp) | 40 sec |
-| **Total** | **472 sec** |
+| BWT construction | 160 sec |
+| Tier 1 (STR, 1-9 bp) | 10 sec |
+| Tier 2 (medium, ≥10 bp) | 117 sec |
+| Tier 3 (long, ≥100 bp) | 26 sec |
+| **Total** | **317 sec** |
 
 #### Key Observations
 
