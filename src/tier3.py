@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from typing import List, Tuple, Set, Optional
 from .models import TandemRepeat
@@ -5,6 +6,77 @@ from .motif_utils import MotifUtils
 from .bwt_core import BWTCore
 from .accelerators import extend_with_mismatches
 from .bwt_seed import bwt_kmer_seed_scan
+
+
+def compute_adaptive_params(
+    seq_len: int,
+    gc_content: float,
+    coverage_ratio: float,
+    min_period: int,
+    max_period: int,
+    preset: str = "balanced",
+) -> dict:
+    """Compute adaptive Tier 3 parameters based on input characteristics."""
+    # Preset → speed_factor
+    speed_weights = {"fast": 0.8, "balanced": 0.5, "sensitive": 0.2}
+    speed_weight = speed_weights.get(preset, 0.5)
+    speed_factor = speed_weight / 0.5
+
+    # Base formulas (continuous functions)
+    safe_seq = max(seq_len, 1)
+
+    base_kmer = int(10 + 6 * math.log10(max(safe_seq / 1e5, 1)))
+    base_stride = int(safe_seq / 40000)
+    base_max_occ = int(safe_seq / 30000)
+    base_scan_bw = int(50 * safe_seq / 1e8)
+    base_scan_fw = int(600 * safe_seq / 1e8)
+
+    # Accuracy params (NOT affected by preset)
+    allowed_mismatch_rate = 0.15 + 0.10 * abs(gc_content - 0.5)
+    tolerance_ratio = 0.02 + 0.02 * (max_period / 100000)
+    anchor_match_pct = 0.70 + 0.10 * (1 - coverage_ratio)
+
+    # Apply preset to speed params
+    kmer_size = int(base_kmer + (speed_factor - 1) * 2)
+    stride = int(base_stride * speed_factor)
+    max_occurrences = int(base_max_occ / speed_factor)
+    scan_backward = int(base_scan_bw / speed_factor)
+    scan_forward = int(base_scan_fw / speed_factor)
+
+    # Coverage correction
+    if coverage_ratio > 0.5:
+        stride = int(stride * (1 - 0.5 * coverage_ratio))
+
+    # Threshold-based strategy changes
+    if safe_seq > 100_000_000:  # large-chr mode
+        stride = max(stride, 150)
+        kmer_size = max(kmer_size, 20)
+        max_occurrences = min(max_occurrences, 500)
+    elif safe_seq < 100_000:  # micro mode
+        stride = max(stride, 20)
+        kmer_size = max(kmer_size, 12)
+
+    # Clamp all values
+    kmer_size = max(12, min(28, kmer_size))
+    stride = max(20, min(300, stride))
+    allowed_mismatch_rate = max(0.15, min(0.20, allowed_mismatch_rate))
+    tolerance_ratio = max(0.02, min(0.04, tolerance_ratio))
+    max_occurrences = max(200, min(1500, max_occurrences))
+    anchor_match_pct = max(0.70, min(0.80, anchor_match_pct))
+    scan_backward = max(20, min(80, scan_backward))
+    scan_forward = max(200, min(800, scan_forward))
+
+    return {
+        "kmer_size": kmer_size,
+        "stride": stride,
+        "allowed_mismatch_rate": allowed_mismatch_rate,
+        "tolerance_ratio": tolerance_ratio,
+        "max_occurrences": max_occurrences,
+        "anchor_match_pct": anchor_match_pct,
+        "scan_backward": scan_backward,
+        "scan_forward": scan_forward,
+    }
+
 
 class Tier3LongReadFinder:
     """Tier 3: Long-read repeat finder using BWT k-mer seeding.
