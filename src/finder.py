@@ -18,7 +18,8 @@ class TandemRepeatFinder:
                  show_progress: bool = False,
                  enabled_tiers: Optional[Set[str]] = None,
                  min_array_bp: Optional[int] = None,
-                 max_array_bp: Optional[int] = None):
+                 max_array_bp: Optional[int] = None,
+                 tier3_mode: str = "balanced"):
         self.sequence = sequence
         self.chromosome = chromosome
         self.min_period = min_period
@@ -70,7 +71,7 @@ class TandemRepeatFinder:
                 show_progress=show_progress
             )
 
-        self.tier3 = Tier3LongReadFinder(self.bwt) if "tier3" in self.enabled_tiers else None
+        self.tier3 = Tier3LongReadFinder(self.bwt, mode=tier3_mode) if "tier3" in self.enabled_tiers else None
 
     def find_all(self) -> List[TandemRepeat]:
         """Execute the full 3-tier finding pipeline."""
