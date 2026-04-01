@@ -625,6 +625,35 @@ Comparison on 5 synthetic test sequences containing 44 planted repeats with know
 - **mreps** reports 84K results (heavy over-detection, filtering required)
 - **ULTRA** is the slowest (24 min) with 3.5x more results than bwtandem
 
+### Centromere Satellite DNA Detection (ColCEN Assembly)
+
+Benchmark on the Arabidopsis Col-CEN genome assembly using CEN180 satellite repeat annotations (GFF3) as ground truth. CEN180 is a ~178 bp satellite repeat constituting centromeric regions, with 20-30% inter-copy divergence.
+
+**CEN180 Annotated Unit Coverage** (per-base coverage of individual annotated CEN180 units):
+
+| Tool | Chr1 | Chr2 | Chr3 | Chr4 | Chr5 | Overall |
+|------|------|------|------|------|------|---------|
+| **bwtandem** | **95.5%** | **99.7%** | **99.4%** | **98.0%** | **98.6%** | **98.2%** |
+| mreps | 33.6% | 34.0% | 29.9% | 32.1% | 24.4% | 30.9% |
+| ULTRA | 0.0% | 0.2% | 0.1% | 0.2% | 0.1% | 0.1% |
+| TRF | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+
+**Centromere Region Coverage** (coverage within centromere boundaries):
+
+| Tool | Total Repeats | CEN Region | ~180bp Period |
+|------|--------------|------------|---------------|
+| **bwtandem** | **32,506** | **49.3%** | **1,499** |
+| mreps | 563,524 | 20.6% | 3,679 |
+| ULTRA | 150,789 | 4.8% | 0 |
+| TRF | 0 | 0.0% | 0 |
+
+#### Key Findings
+
+- **bwtandem** is the only tool that effectively detects CEN180 satellite repeats, achieving 98.2% coverage of annotated CEN180 units across all 5 chromosomes
+- Other tools fail because CEN180 has ~25% inter-copy divergence, exceeding their mismatch tolerance thresholds
+- The remaining ~1.8% uncovered CEN180 units are dispersed (isolated) copies with autocorrelation at random level (~0.30), meaning they lack tandem repeat periodicity at the sequence level
+- bwtandem's satellite DNA scanner uses autocorrelation-based period detection that tolerates high divergence
+
 ### Tool Overlap (Chr4 Venn Diagram)
 
 Region overlap analysis using 500bp genomic bins on Arabidopsis Chr4:
