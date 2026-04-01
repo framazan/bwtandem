@@ -654,6 +654,25 @@ Benchmark on the Arabidopsis Col-CEN genome assembly using CEN180 satellite repe
 - The remaining ~1.8% uncovered CEN180 units are dispersed (isolated) copies with autocorrelation at random level (~0.30), meaning they lack tandem repeat periodicity at the sequence level
 - bwtandem's satellite DNA scanner uses autocorrelation-based period detection that tolerates high divergence
 
+### Telomere Repeat Detection (ColCEN Assembly)
+
+bwtandem's Tier 1 (short tandem repeats, periods 1–9 bp) automatically detects telomeric repeats (AAACCCT, 7 bp period) at chromosome ends and interstitial telomeric sequences.
+
+**Telomere Detection Summary** (5 nuclear chromosomes):
+
+| Chr | Telomere Repeats | Period 7 | Period 8 | 5' End | 3' End |
+|-----|-----------------|----------|----------|--------|--------|
+| Chr1 | 421 | 421 (100%) | 0 | ✓ | ✓ |
+| Chr2 | 9 | 9 (100%) | 0 | — (rDNA) | ✓ |
+| Chr3 | 45 | 42 (93%) | 3 | ✓ | ✓ |
+| Chr4 | 112 | 108 (96%) | 2 | — (rDNA) | ✓ |
+| Chr5 | 48 | 45 (94%) | 3 | ✓ | ✓ |
+
+- All detected motifs are rotations of the canonical telomere repeat AAACCCT: CCTAAAC, AACCCTA, CCCTAAA, TTAGGGT, GGTTTAG, GGGTTTA, etc.
+- Chr1 has 421 telomeric repeats, mostly interstitial telomeric sequences (ITS) within the centromere region (17.1M–17.6M), reflecting retrotransposon-mediated telomere insertion into centromeric DNA
+- Chr2 and Chr4 start with rDNA (not telomeric sequence) in the ColCEN assembly
+- Mismatch rates in the BED output indicate SNPs relative to the consensus motif (e.g., 3.7% = ~9 SNPs per 251 bp region)
+
 ### Tool Overlap (Chr4 Venn Diagram)
 
 Region overlap analysis using 500bp genomic bins on Arabidopsis Chr4:
