@@ -36,6 +36,15 @@ def _c_smallest_period_str_approx(motif_bytes: bytes, max_error_rate: float = 0.
     arr = (ctypes.c_ubyte * n)(*motif_bytes)
     return _c_tier2.smallest_period_str_approx(arr, n, ctypes.c_double(max_error_rate))
 
+
+def _reduce_to_primitive(motif_bytes: bytes) -> str:
+    """Reduce motif bytes to primitive period motif string."""
+    primitive_period = _c_smallest_period_str(motif_bytes)
+    if primitive_period == len(motif_bytes):
+        primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
+    return motif_bytes[:primitive_period].decode('ascii', errors='replace')
+
+
 class Tier2LCPFinder:
     """Tier 2: BWT/FM-index based repeat finder for ALL motif lengths with imperfect repeat support.
 
@@ -173,13 +182,8 @@ class Tier2LCPFinder:
                     continue
 
                 # Tier 2 post-processing: primitive period reduction
-                motif_arr = text_arr[full_start:full_start + period]
-                motif_bytes = motif_arr.tobytes()
-
-                primitive_period = _c_smallest_period_str(motif_bytes)
-                if primitive_period == len(motif_bytes):
-                    primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
-                motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
+                motif_bytes = text_arr[full_start:full_start + period].tobytes()
+                motif = _reduce_to_primitive(motif_bytes)
 
                 repeat = self._refine_and_create_repeat(
                     chromosome, full_start, full_end, motif,
@@ -215,11 +219,7 @@ class Tier2LCPFinder:
 
         fallback_found = 0
         for cand in seed_candidates:
-            motif_bytes = cand.motif.encode('ascii', errors='replace')
-            primitive_period = _c_smallest_period_str(motif_bytes)
-            if primitive_period == len(motif_bytes):
-                primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
-            motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
+            motif = _reduce_to_primitive(cand.motif.encode('ascii', errors='replace'))
 
             repeat = self._refine_and_create_repeat(
                 chromosome, cand.start, cand.end, motif,
@@ -370,13 +370,7 @@ class Tier2LCPFinder:
                 if copies < required_copies:
                     continue
 
-                motif_arr = s_arr[full_start:full_start + period]
-                motif_bytes = motif_arr.tobytes()
-
-                primitive_period = _c_smallest_period_str(motif_bytes)
-                if primitive_period == len(motif_bytes):
-                    primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
-                motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
+                motif = _reduce_to_primitive(s_arr[full_start:full_start + period].tobytes())
 
                 # Skip if candidate region already mostly covered
                 cand_span = full_end - full_start
@@ -427,11 +421,7 @@ class Tier2LCPFinder:
                 if cov_count / cand_len > 0.5:
                     continue
 
-            motif_bytes = cand.motif.encode('ascii', errors='replace')
-            primitive_period = _c_smallest_period_str(motif_bytes)
-            if primitive_period == len(motif_bytes):
-                primitive_period = _c_smallest_period_str_approx(motif_bytes, 0.02)
-            motif = motif_bytes[:primitive_period].decode('ascii', errors='replace')
+            motif = _reduce_to_primitive(cand.motif.encode('ascii', errors='replace'))
 
             repeat = self._refine_and_create_repeat(
                 chromosome, cand.start, cand.end, motif, tier=2

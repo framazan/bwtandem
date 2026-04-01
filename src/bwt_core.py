@@ -225,9 +225,11 @@ class BWTCore:
             import pydivsufsort  # type: ignore
             sa_list = pydivsufsort.divsufsort(self.text_arr.tobytes())
             return np.array(sa_list, dtype=np.int32)
-        except (ImportError, Exception):
-            # Silently fall back to NumPy implementation
-            pass
+        except ImportError:
+            pass  # pydivsufsort not installed; use NumPy fallback
+        except Exception:
+            import sys
+            print("  Warning: pydivsufsort failed, using NumPy fallback", file=sys.stderr)
 
         n = self.n
         if n == 0:

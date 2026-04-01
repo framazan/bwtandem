@@ -29,11 +29,7 @@ def apply_mask(seq: str, mask_mode: str) -> str:
             else:
                 result.append(ch.upper())
         elif ch == 'N' or ch == 'n':
-            # Hard-masked base
-            if mask_mode in ("hard", "both"):
-                result.append('N')
-            else:
-                result.append('N')  # N is always kept as N
+            result.append('N')
         else:
             result.append(ch.upper())
     return ''.join(result)
