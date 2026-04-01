@@ -1,5 +1,9 @@
 # BWT-based Tandem Repeat Finder
 
+## How BWT Finds Tandem Repeats
+
+![How BWT finds tandem repeats](figures/Video%20Project.gif)
+
 ## Project Overview
 
 BWT Tandem Repeat Finder is a tool for detecting tandem repeats in genomic FASTA files. It uses the Burrows-Wheeler Transform (BWT) and FM-index as its core algorithms, and comprehensively detects everything from short perfect repeats (STR/microsatellites) to ultra-long repeats spanning hundreds of kilobases through a 3-tier pipeline.
