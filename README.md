@@ -660,6 +660,29 @@ bwtandem's Tier 1 (short tandem repeats, periods 1–9 bp) automatically detects
 - Chr2 and Chr4 start with rDNA (not telomeric sequence) in the ColCEN assembly
 - Mismatch rates in the BED output indicate SNPs relative to the consensus motif (e.g., 3.7% = ~9 SNPs per 251 bp region)
 
+### Cross-Species Validation: Oropetium thomaeum (245 Mb)
+
+To validate bwtandem beyond Arabidopsis, we ran it on the *Oropetium thomaeum* v1.0 genome assembly (Phytozome V12, 243 Mb, 625 contigs). The published analysis (VanBuren et al., 2015) used TRF with parameters `1 1 2 80 5 200 2000 -d -h` and identified 155 bp centromeric repeats (including 310 bp dimers and 465 bp trimers) and 18 telomeric sequences with the monomer AAACCCT.
+
+**bwtandem results** (8 threads, all tiers, 11 min 30 sec):
+
+| Feature | Published (TRF) | bwtandem | Match |
+|---------|----------------|----------|-------|
+| Total repeats | Not reported | **56,854** | — |
+| Telomere (AAACCCT, 7 bp) | 18 sequences | 362 repeats / **18 contigs** | Exact match |
+| Centromere (155 bp monomer) | Detected | **357 repeats** across 53 contigs | Detected |
+| Centromere (310 bp dimer) | Detected | **13 repeats** | Detected |
+| Centromere (465 bp trimer) | Detected | **3 repeats** | Detected |
+
+**Key findings**:
+
+- **Telomere**: bwtandem found AAACCCT telomeric repeats in exactly **18 contigs**, matching the published count. These are located at contig ends, consistent with telomeric positions.
+- **Centromere**: The 155 bp base centromeric repeat was detected across 53 contigs, with the largest arrays on contig 003 (up to 65.7 copies, ~10 kb arrays in the 6.0–6.3 Mb region), consistent with the paper's description of contig 003 as one of the three largest centromeric arrays (>400 kb).
+- **Higher-order repeats**: 310 bp dimers and 465 bp trimers were also detected, confirming bwtandem's ability to identify higher-order repeat organization.
+- **Runtime**: 11.5 minutes for a 243 Mb draft genome with 625 contigs — comparable to the Arabidopsis Col-CEN (132 Mb) benchmarks when accounting for genome size.
+
+This demonstrates that bwtandem generalizes beyond Arabidopsis to other plant genomes with different centromeric repeat families and assembly qualities.
+
 ### Tool Overlap (Chr4 Venn Diagram)
 
 Region overlap analysis using 500bp genomic bins on Arabidopsis Chr4:
