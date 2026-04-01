@@ -686,6 +686,12 @@ class MotifUtils:
             )
             if 0 < approx_primitive_len < primitive_len:
                 primitive_len = approx_primitive_len
+        # For long motifs (satellite DNA), try higher mismatch tolerance
+        # CEN180-like satellites can have 20-30% inter-copy divergence
+        if primitive_len == len(summary.consensus) and primitive_len >= 200:
+            sat_primitive = MotifUtils._detect_satellite_period(summary.consensus)
+            if 0 < sat_primitive < primitive_len:
+                primitive_len = sat_primitive
         if primitive_len == 0:
             return None
 
@@ -742,6 +748,63 @@ class MotifUtils:
             if n % p == 0 and s == s[:p] * (n // p):
                 return p
         return n
+
+    @staticmethod
+    def _detect_satellite_period(s: str) -> int:
+        """Detect the primitive period of highly divergent satellite DNA.
+
+        Uses autocorrelation: for each candidate period p, count how many
+        positions i have s[i] == s[i+p]. The period with the highest
+        autocorrelation peak (above a threshold) is the primitive period.
+
+        Designed for satellite DNA like CEN180 with 20-30% inter-copy divergence.
+        Only called for motifs >= 200bp.
+        """
+        n = len(s)
+        if n < 200:
+            return n
+
+        best_p = n
+        best_score = 0.0
+        min_identity = 0.60  # 60% identity threshold for satellite DNA
+
+        # Search periods from small to large, looking for the smallest
+        # period with high autocorrelation
+        for p in range(50, min(n // 2 + 1, 500)):
+            total = n - p
+            if total <= 0:
+                continue
+            matches = sum(1 for i in range(total) if s[i] == s[i + p])
+            identity = matches / total
+
+            if identity >= min_identity and identity > best_score:
+                best_score = identity
+                best_p = p
+                # Found a good period; check if there's an even smaller
+                # sub-period that also works
+                break
+
+        if best_p == n:
+            return n
+
+        # Verify that this period divides the motif reasonably well
+        # (at least 2 copies)
+        if n / best_p < 2.0:
+            return n
+
+        # Check for sub-periods of best_p
+        for sub_p in range(max(10, best_p // 20), best_p):
+            if best_p % sub_p != 0:
+                continue
+            total = n - sub_p
+            if total <= 0:
+                continue
+            matches = sum(1 for i in range(total) if s[i] == s[i + sub_p])
+            identity = matches / total
+            if identity >= min_identity:
+                return sub_p
+
+        return best_p
 
     @staticmethod
     def smallest_period_str_approx(s: str, max_error_rate: float = 0.02) -> int:

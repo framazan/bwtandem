@@ -191,14 +191,30 @@ class TandemRepeatFinder:
             print(f"  [{self.chromosome}] Skipping Tier 3 (disabled)", flush=True)
 
         # --- Post-processing ---
-        # Sort by position
-        all_repeats.sort(key=lambda x: x.start)  # Sort all repeats by start position
+        all_repeats.sort(key=lambda x: x.start)
 
-        # Merge adjacent repeats (unify fragmented motifs)
-        all_repeats = self._merge_adjacent_repeats(all_repeats)  # Merge adjacent repeats with the same motif
+        if self.show_progress:
+            t0 = time.time()
+        all_repeats = self._merge_adjacent_repeats(all_repeats)
+        if self.show_progress:
+            print(f"  [{self.chromosome}] Merge: {time.time() - t0:.2f}s, {len(all_repeats)} repeats", flush=True)
+            t0 = time.time()
+        final_repeats = self._filter_overlaps(all_repeats)
+        if self.show_progress:
+            print(f"  [{self.chromosome}] Filter: {time.time() - t0:.2f}s, {len(final_repeats)} repeats", flush=True)
 
-        # Filter overlaps (keep longest/best)
-        final_repeats = self._filter_overlaps(all_repeats)  # Keep only the highest-scoring repeat among overlapping ones
+        # Satellite DNA scanner (multiple passes)
+        for pass_num in range(2):
+            if self.show_progress:
+                t0 = time.time()
+            prev_count = len(final_repeats)
+            final_repeats = self._fill_satellite_gaps(final_repeats)
+            final_repeats = self._merge_adjacent_repeats(final_repeats)
+            if self.show_progress:
+                print(f"  [{self.chromosome}] Satellite pass {pass_num+1}: {time.time() - t0:.2f}s, {len(final_repeats)} repeats (+{len(final_repeats) - prev_count})", flush=True)
+            if len(final_repeats) == prev_count:
+                break
+
         final_repeats = [r for r in final_repeats if self._repeat_within_bounds(r)]  # Filter to only results within user-specified bounds
 
         return final_repeats  # Return the final list of repeats
@@ -266,37 +282,66 @@ class TandemRepeatFinder:
             canon2, strand2 = MotifUtils.get_canonical_motif_stranded(motif2)  # Canonical form and strand direction of current motif
 
             # Allow merge if canonical motifs match and gap is small
-            max_gap = max(10, len(canon1))
-            if canon1 == canon2 and gap <= max_gap:
+            # For long-period repeats (satellite DNA), allow larger gaps
+            # since individual repeat units can be ~178bp with imperfect boundaries
+            period_len = len(canon1)
+            if period_len >= 100:
+                max_gap = period_len * 100  # e.g. 17.8kb for CEN180
+            elif period_len >= 20:
+                max_gap = period_len * 10
+            else:
+                max_gap = max(10, period_len)
+            # For long-period repeats, use fuzzy canonical motif matching
+            # (satellite DNA consensus can drift between adjacent regions)
+            motifs_match = (canon1 == canon2)
+            if not motifs_match and len(canon1) == len(canon2) and len(canon1) >= 50:
+                hamming = sum(1 for a, b in zip(canon1, canon2) if a != b)
+                motifs_match = (hamming / len(canon1)) <= 0.10  # 10% tolerance
+            if motifs_match and gap <= max_gap:
                 # Trial merge: check if combined region quality is acceptable
                 new_start = min(prev.start, current.start)
                 new_end = max(prev.end, current.end)
                 avg_mm = (prev.mismatch_rate + current.mismatch_rate) / 2
 
-                # Quick quality check: scan the merged region
-                # Use actual motif from prediction (not canonical) for comparison
+                # Quality check for merge
                 text_arr = self.bwt.text_arr
                 actual_motif = motif1
-                motif_arr = np.frombuffer(actual_motif.encode('ascii'), dtype=np.uint8)
                 mlen = len(actual_motif)
-                trial_mismatches = 0
-                trial_total = 0
-                for pos in range(new_start, min(new_end, len(text_arr) - mlen), mlen):
-                    window = text_arr[pos:pos + mlen]
-                    if len(window) == mlen:
-                        trial_mismatches += np.sum(window != motif_arr)
-                        trial_total += mlen
-                trial_mm = trial_mismatches / trial_total if trial_total > 0 else 0
+                merge_ok = False
 
-                # Only merge if trial mismatch rate is reasonable
-                # (not more than 2x the average of individual rates + 5% margin)
-                max_acceptable_mm = max(avg_mm * 2, 0.15)
-                if trial_mm <= max_acceptable_mm:
+                if mlen >= 100 and gap > mlen:
+                    # Satellite DNA: check periodicity of gap region via autocorrelation
+                    gap_start_pos = prev.end
+                    gap_end_pos = current.start
+                    gap_seq = text_arr[gap_start_pos:gap_end_pos]
+                    gap_len = len(gap_seq)
+                    if gap_len >= mlen * 2:
+                        total = gap_len - mlen
+                        matches = int(np.sum(gap_seq[:total] == gap_seq[mlen:mlen + total]))
+                        identity = matches / total if total > 0 else 0
+                        merge_ok = identity >= 0.55
+                else:
+                    # Short repeats: use direct motif comparison
+                    motif_arr = np.frombuffer(actual_motif.encode('ascii'), dtype=np.uint8)
+                    trial_mismatches = 0
+                    trial_total = 0
+                    for pos in range(new_start, min(new_end, len(text_arr) - mlen), mlen):
+                        window = text_arr[pos:pos + mlen]
+                        if len(window) == mlen:
+                            trial_mismatches += np.sum(window != motif_arr)
+                            trial_total += mlen
+                    trial_mm = trial_mismatches / trial_total if trial_total > 0 else 0
+                    max_acceptable_mm = max(avg_mm * 2, 0.15)
+                    merge_ok = trial_mm <= max_acceptable_mm
+
+                if merge_ok:
                     prev.start = new_start
                     prev.end = new_end
                     prev.length = new_end - new_start
                     prev.copies = prev.length / len(canon1)
-                    self._recompute_stats(prev)
+                    # Skip expensive stats recomputation for very large regions
+                    if prev.length <= 50000:
+                        self._recompute_stats(prev)
                 else:
                     # Mismatch too high after merge — keep as separate repeats
                     merged.append(current)
@@ -349,6 +394,122 @@ class TandemRepeatFinder:
                 text_arr, repeat.start, repeat.end, motif_len, consensus_arr
             )
             repeat.variations = variations  # Update variation information
+
+    def _fill_satellite_gaps(self, repeats: List[TandemRepeat]) -> List[TandemRepeat]:
+        """Scan for satellite DNA regions not covered by existing detections.
+
+        Uses autocorrelation on uncovered regions to find periodic satellite DNA
+        (e.g., CEN180) that may have been missed by the 3-tier pipeline due to
+        high inter-copy divergence.
+        """
+        text_arr = self.bwt.text_arr
+        text_str = self.sequence
+        n = len(text_arr)
+
+        if n < 1000:
+            return repeats
+
+        # Build coverage mask from existing repeats
+        covered = np.zeros(n, dtype=bool)
+        for r in repeats:
+            covered[r.start:min(r.end, n)] = True
+
+        # Find uncovered blocks >= 300bp using numpy
+        transitions = np.diff(covered.astype(np.int8))
+        # Starts of uncovered regions: transition from True(1) to False(0) = -1
+        # Ends of uncovered regions: transition from False(0) to True(1) = +1
+        gap_starts = np.where(transitions == -1)[0] + 1  # Position after last covered
+        gap_ends = np.where(transitions == 1)[0] + 1     # First covered position
+        # Handle boundaries
+        if not covered[0]:
+            gap_starts = np.concatenate(([0], gap_starts))
+        if not covered[-1]:
+            gap_ends = np.concatenate((gap_ends, [n]))
+        uncovered_blocks = [(int(s), int(e)) for s, e in zip(gap_starts, gap_ends) if e - s >= 300]
+
+        if not uncovered_blocks:
+            return repeats
+
+        # Collect satellite motifs and positions from existing long-period repeats
+        satellite_motifs = set()
+        satellite_positions = []
+        for r in repeats:
+            m = r.motif or r.consensus_motif
+            if m and 100 <= len(m) <= 300:
+                satellite_motifs.add(m)
+                satellite_positions.append((r.start, r.end))
+
+        # Build a proximity mask: only scan blocks near satellite regions
+        # This avoids scanning the entire non-centromeric sequence
+        near_satellite = np.zeros(n, dtype=bool)
+        proximity = 50000  # 50kb proximity window
+        for sat_start, sat_end in satellite_positions:
+            near_satellite[max(0, sat_start - proximity):min(n, sat_end + proximity)] = True
+
+        new_repeats = []
+        for block_start, block_end in uncovered_blocks:
+            block_size = block_end - block_start
+            if block_size > 100000 or block_size < 300:
+                continue
+
+            # Skip blocks not near existing satellite detections
+            if not near_satellite[block_start]:
+                continue
+
+            # Autocorrelation-based satellite detection
+            # Scan multiple windows: start, middle, end of block
+            windows = [(block_start, min(block_start + 5000, block_end))]
+            if block_size > 5000:
+                mid = block_start + block_size // 2 - 2500
+                windows.append((mid, min(mid + 5000, block_end)))
+                windows.append((max(block_start, block_end - 5000), block_end))
+
+            best_period = 0
+            best_identity = 0.0
+            best_w_start = block_start
+
+            for w_start, w_end in windows:
+                w_region = text_arr[w_start:w_end]
+                w_size = len(w_region)
+                if w_size < 300:
+                    continue
+
+                for p in range(100, min(301, w_size // 2)):
+                    total = w_size - p
+                    if total <= 0:
+                        continue
+                    matches = int(np.sum(w_region[:total] == w_region[p:p + total]))
+                    identity = matches / total
+                    if identity > best_identity:
+                        best_identity = identity
+                        best_period = p
+                        best_w_start = w_start
+                        if identity > 0.80:
+                            break
+                if best_identity > 0.80:
+                    break
+
+            if best_identity < 0.55 or best_period < 50:
+                continue
+
+            use_motif = text_arr[best_w_start:best_w_start + best_period].tobytes().decode('ascii', errors='replace')
+            copies = block_size / best_period
+
+            new_tr = TandemRepeat(
+                chrom=self.chromosome,
+                start=block_start, end=block_end,
+                motif=use_motif, copies=copies,
+                length=block_size, consensus_motif=use_motif,
+                mismatch_rate=1.0 - best_identity, tier="satellite",
+            )
+            new_repeats.append(new_tr)
+
+        if new_repeats:
+            filled = list(repeats) + new_repeats
+            filled.sort(key=lambda x: x.start)
+            return filled
+
+        return repeats
 
     def cleanup(self):
         """Release resources."""

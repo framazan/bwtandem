@@ -72,9 +72,36 @@
   - `src/bwt_core.py`: Integrated C rank queries, backward_search, and Kasai LCP. Added flat checkpoint data preparation for zero-overhead C access
   - `src/motif_utils.py`: C-accelerated `align_repeat_region` with text pointer caching (avoids 72s from_buffer_copy). C-accelerated `smallest_period_str` and `smallest_period_str_approx`
   - Removed unused `_build_kmer_hash` (28s) and `_sample_suffix_array` (5s) from BWTCore init
-- **Result**: Chr4 total 317s → 283s (1.12x speedup, 4 min 43 sec)
-  - BWT construction: 172s → 145s (kmer_hash/sampled_sa removed)
-  - backward_search: 231s → 22s (C, 10.5x)
+- **Result**: Chr4 total 317s → 244s (1.3x speedup, 4 min 4 sec)
+  - BWT construction: 172s → 157s (sampled_sa removed, kmer_hash restored for accuracy)
+  - Tier 2: 117s → 65s (C batch processing + BWT backward search)
   - Kasai LCP: 49s → <1s (C, 50x+)
-  - Test suite: 15.2s → 7.8s (2x faster)
+  - Tier 3: 40s → 5s (C acceleration)
+  - Test suite: 15.2s → 9.8s (1.5x faster)
+- **Accuracy**: 29/29 tests passed, all ground truth tests maintain 100% sensitivity/precision
+- **Note**: kmer_hash build restored (removing it caused adjacent repeat sensitivity regression)
+
+## Step 9: Satellite DNA Scanner for Centromere Detection (Complete)
+- **Change**: Post-processing satellite DNA scanner using autocorrelation-based period detection
+- **Key modifications**:
+  - `src/finder.py`: Added `_fill_satellite_gaps()` method to `TandemRepeatFinder`
+    - Builds numpy coverage mask from existing repeats
+    - Finds uncovered blocks (≥300bp, ≤100kb) using numpy transitions
+    - Proximity filter: only scans blocks within 50kb of existing satellite detections
+    - Multi-window autocorrelation: scans start, middle, and end of each block
+    - Threshold: ≥0.55 autocorrelation identity, periods 100-300bp
+    - Creates repeats directly from autocorrelation (skips expensive refine_repeat)
+  - `src/finder.py`: Improved `_merge_adjacent_repeats()` for satellite DNA
+    - Fuzzy canonical motif matching (≤10% hamming distance for motifs ≥50bp)
+    - Vectorized gap autocorrelation check using numpy
+    - Skip `_recompute_stats` for merged regions >50kb
+    - Large gap allowance for satellite DNA (period × 100)
+  - `src/motif_utils.py`: Added `_detect_satellite_period()` for highly divergent repeats
+    - Autocorrelation-based primitive period detection (≥60% identity threshold)
+    - Sub-period search for compound satellite motifs
+- **Result**: ColCEN full genome centromere benchmark
+  - CEN180 unit coverage: Chr1 95.5%, Chr2 99.7%, Chr3 99.4%, Chr4 98.0%, Chr5 98.6%, **Overall 98.2%**
+  - bwtandem dramatically outperforms all other tools (mreps 30.9%, ULTRA 0.1%, TRF 0.0%)
+  - Runtime: 27 min for full 132MB ColCEN genome (5 chromosomes + organelles)
+  - Satellite scanner adds <15s per chromosome
 - **Accuracy**: 29/29 tests passed, all ground truth tests maintain 100% sensitivity/precision
