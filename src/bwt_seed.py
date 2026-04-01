@@ -105,7 +105,7 @@ def bwt_kmer_seed_scan(
     bwt_queries = 0  # FM-index query counter (for progress reporting)
 
     i = 0  # Current sampling position (incremented by stride)
-    while i < n - effective_kmer:  # Iterate until k-mer would be truncated at sequence end
+    while i <= n - effective_kmer:  # Iterate until the final full-length k-mer start
         # Skip positions already found by previous tiers
         if covered_mask is not None and covered_mask[i]:
             i += stride  # Position already covered; move to next sample position
@@ -113,7 +113,7 @@ def bwt_kmer_seed_scan(
 
         # Extract k-mer at current position
         kmer_arr = text_arr[i:i + effective_kmer]  # Sequence slice for the k-mer
-        kmer_str = kmer_arr.tobytes().decode('ascii', errors='replace')  # Convert byte array to string
+        kmer_str = kmer_arr.tobytes().decode('ascii', errors='replace').upper()  # Normalize input case
 
         # Skip if k-mer was already queried or contains non-DNA bases
         if kmer_str in seen_kmers:  # Check cache to avoid duplicate queries
@@ -137,7 +137,8 @@ def bwt_kmer_seed_scan(
             i += stride
             continue
 
-        positions = bwt.locate_positions(kmer_str)  # Return all positions where k-mer occurs
+        positions = bwt.suffix_array[sp:ep + 1].tolist()  # Reuse the SA interval from backward_search
+        positions.sort()
         if len(positions) < min_copies:  # Skip if actual position count is below minimum copies
             i += stride
             continue

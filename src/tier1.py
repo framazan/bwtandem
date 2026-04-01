@@ -67,7 +67,7 @@ class Tier1STRFinder:
             min_run = required_threshold // motif_len  # minimum consecutive matching positions
 
             seed_min_copies = 2
-            max_candidates = n // motif_len + 1
+            max_candidates = min(n // motif_len + 1, 1_000_000)
 
             # Use C extension for fast run detection if available
             if _c_lib is not None:
@@ -143,8 +143,6 @@ class Tier1STRFinder:
                     continue
 
                 entropy = MotifUtils.calculate_entropy(motif)
-                if entropy < self.min_entropy and ext_length < 20:
-                    continue
 
                 refined = MotifUtils.refine_repeat(
                     sequence_str,
