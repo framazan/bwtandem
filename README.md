@@ -630,11 +630,12 @@ Benchmark on the Arabidopsis Col-CEN genome assembly using CEN180 satellite repe
 | **bwtandem** | **95.5%** | **99.7%** | **99.4%** | **98.0%** | **98.6%** | **98.2%** |
 | mreps | 33.6% | 34.0% | 29.9% | 32.1% | 24.4% | 30.9% |
 | ULTRA | 0.0% | 0.2% | 0.1% | 0.2% | 0.1% | 0.1% |
-| TRF | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+| TRF | N/A | N/A | N/A | N/A | N/A | N/A |
 
 #### Key Findings
 
 - **bwtandem** is the only tool that effectively detects CEN180 satellite repeats, achieving **98.2%** per-base coverage of GFF3-annotated CEN180 units across all 5 chromosomes
+- **TRF** fails to complete on the ColCEN assembly — it hangs on centromeric sequences because its sliding-window DP alignment exhaustively tries all period/alignment combinations across highly repetitive regions, causing combinatorial explosion. bwtandem avoids this by using BWT/FM-index to target only positions where repeats actually exist, rather than scanning every window
 - Other tools fail because CEN180 has ~25% inter-copy divergence, exceeding their mismatch tolerance thresholds
 - The remaining ~1.8% uncovered CEN180 units are dispersed copies with autocorrelation at random level (~0.30), lacking detectable tandem repeat periodicity at the sequence level
 - bwtandem's satellite DNA scanner uses autocorrelation-based period detection that tolerates high divergence
