@@ -431,12 +431,10 @@ class TandemRepeatFinder:
             return repeats
 
         # Collect satellite motifs and positions from existing long-period repeats
-        satellite_motifs = set()
         satellite_positions = []
         for r in repeats:
-            m = r.motif or r.consensus_motif
+            m = r.consensus_motif or r.motif
             if m and 100 <= len(m) <= 300:
-                satellite_motifs.add(m)
                 satellite_positions.append((r.start, r.end))
 
         # Build a proximity mask: only scan blocks near satellite regions
@@ -453,7 +451,7 @@ class TandemRepeatFinder:
                 continue
 
             # Skip blocks not near existing satellite detections
-            if not near_satellite[block_start]:
+            if not np.any(near_satellite[block_start:block_end]):
                 continue
 
             # Autocorrelation-based satellite detection

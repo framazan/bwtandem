@@ -105,6 +105,9 @@ class BWTCore:
             sa_sample_rate: Sample every nth suffix array position for space efficiency
             occ_sample_rate: Occurrence checkpoints every nth position to reduce memory
         """
+        if '$' in text[:-1]:
+            raise ValueError("Input text must not contain internal '$' sentinel characters")
+
         self.text: str = text
         self.n = len(text)
         self.sa_sample_rate = sa_sample_rate
@@ -125,8 +128,7 @@ class BWTCore:
         self.char_counts_code = {ord(k): v for k, v in self.char_counts.items()}
         self.char_totals_code = {ord(k): v for k, v in self.char_totals.items()}
         self.occ_checkpoints = self._build_occurrence_checkpoints()
-        # Defer SA sampling (only needed for _get_suffix_position, not used in pipeline)
-        self.sampled_sa = {}
+        self.sampled_sa = self._sample_suffix_array()
 
         # Prepare C-accelerated data structures for backward search
         self._c_bwt_ptr = None
@@ -182,8 +184,8 @@ class BWTCore:
         Returns:
             List of positions where k-mer occurs
         """
-        if len(kmer) > 8 or not self.kmer_hash:
-            # Fall back to FM-index for longer k-mers
+        if len(kmer) != 8 or not self.kmer_hash:
+            # Hash is built only for 8-mers; use FM-index for any other length.
             return self.locate_positions(kmer)
 
         # Encode k-mer to hash

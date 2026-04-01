@@ -535,7 +535,9 @@ class MotifUtils:
             return None
 
         start = max(0, start)
-        end = min(seq_len, end if end > start else seq_len)
+        if end <= start:
+            return None
+        end = min(seq_len, end)
 
         motif_len = len(motif_template)
         if motif_len == 0:
