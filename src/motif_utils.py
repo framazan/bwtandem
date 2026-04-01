@@ -686,6 +686,24 @@ class MotifUtils:
             )
             if 0 < approx_primitive_len < primitive_len:
                 primitive_len = approx_primitive_len
+        # If consensus period equals its length, check actual repeat region
+        # for a shorter period via autocorrelation (handles off-by-one motifs
+        # like AAACCCTA that should be period 7 AAACCCT).
+        if primitive_len == len(summary.consensus) and primitive_len <= 20:
+            region = sequence[start:end]
+            region_len = len(region)
+            if region_len >= primitive_len * 2:
+                best_sub_p = primitive_len
+                best_score = 0.0
+                for p in range(max(1, primitive_len - 2), primitive_len):
+                    matches = sum(1 for i in range(region_len - p)
+                                  if region[i] == region[i + p])
+                    score = matches / (region_len - p)
+                    if score > 0.85 and score > best_score:
+                        best_score = score
+                        best_sub_p = p
+                if best_sub_p < primitive_len:
+                    primitive_len = best_sub_p
         # For long motifs (satellite DNA), try higher mismatch tolerance
         # CEN180-like satellites can have 20-30% inter-copy divergence
         if primitive_len == len(summary.consensus) and primitive_len >= 200:
@@ -830,11 +848,7 @@ class MotifUtils:
 
         max_error_rate = max(0.0, min(0.05, max_error_rate))
 
-        # Keep period search conservative: at least 2 repeats must fit.
         for p in range(1, (n // 2) + 1):
-            repeats = n / p
-            if repeats < 2.0:
-                continue
             template = s[:p]
             mismatches = 0
             for i, ch in enumerate(s):
