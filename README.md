@@ -607,27 +607,17 @@ Comparison on 5 synthetic test sequences containing 44 planted repeats with know
 
 | Tool | Repeats Found | Runtime |
 |------|---------------|---------|
-| **bwtandem** | **4,777** | 5 min 17 sec |
+| **bwtandem** | **4,826** | 3 min 32 sec |
 | TRF | 4,549 | **34 sec** |
 | mreps | 84,502 | 48 sec |
 | ULTRA | 23,145 | 24 min 11 sec |
 
-#### bwtandem Tier Breakdown (Chr4)
-
-| Phase | Time |
-|-------|------|
-| BWT construction | 160 sec |
-| Tier 1 (STR, 1-9 bp) | 10 sec |
-| Tier 2 (medium, ≥10 bp) | 117 sec |
-| Tier 3 (long, ≥100 bp) | 26 sec |
-| **Total** | **317 sec** |
-
 #### Key Observations
 
-- **bwtandem** achieves the highest sensitivity and precision (100%/100% on synthetic data) and detects 45% more repeats than TRF on Chr4
+- **bwtandem** achieves the highest sensitivity and precision (100%/100% on synthetic data) and detects 6% more repeats than TRF on Chr4
 - **TRF** is the fastest tool (34 sec) with high precision
 - **mreps** reports 84K results (heavy over-detection, filtering required)
-- **ULTRA** is the slowest (24 min) with 3.5x more results than bwtandem
+- **ULTRA** is the slowest (24 min) with 4.8x more results than bwtandem
 
 ### Centromere Satellite DNA Detection (ColCEN Assembly)
 
@@ -677,12 +667,12 @@ Region overlap analysis using 500bp genomic bins on Arabidopsis Chr4:
 
 | Comparison | Shared Bins | bwtandem-only | Other-only |
 |-----------|-------------|---------------|------------|
-| bwtandem vs TRF | 2,990 | 4,074 | 879 |
-| bwtandem vs ULTRA | 6,062 | 1,002 | 11,104 |
-| bwtandem vs mreps | 4,031 | 3,033 | 11,692 |
-| All 4 tools | 1,938 | — | — |
+| bwtandem vs TRF | 2,879 | 2,473 | 990 |
+| bwtandem vs ULTRA | 4,663 | 689 | 12,503 |
+| bwtandem vs mreps | 3,288 | 2,064 | 12,435 |
+| All 4 tools | 1,891 | — | — |
 
-bwtandem shares 77% of TRF's detected regions while finding 4,074 additional regions that TRF misses. ULTRA and mreps each detect many regions not found by other tools, likely due to different sensitivity/specificity trade-offs.
+bwtandem shares 74% of TRF's detected regions while finding 2,473 additional regions that TRF misses. ULTRA and mreps each detect many regions not found by other tools, likely due to different sensitivity/specificity trade-offs.
 
 ---
 
