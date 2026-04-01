@@ -638,21 +638,13 @@ Benchmark on the Arabidopsis Col-CEN genome assembly using CEN180 satellite repe
 | ULTRA | 0.0% | 0.2% | 0.1% | 0.2% | 0.1% | 0.1% |
 | TRF | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
 
-**Centromere Region Coverage** (coverage within centromere boundaries):
-
-| Tool | Total Repeats | CEN Region | ~180bp Period |
-|------|--------------|------------|---------------|
-| **bwtandem** | **32,506** | **49.3%** | **1,499** |
-| mreps | 563,524 | 20.6% | 3,679 |
-| ULTRA | 150,789 | 4.8% | 0 |
-| TRF | 0 | 0.0% | 0 |
-
 #### Key Findings
 
-- **bwtandem** is the only tool that effectively detects CEN180 satellite repeats, achieving 98.2% coverage of annotated CEN180 units across all 5 chromosomes
+- **bwtandem** is the only tool that effectively detects CEN180 satellite repeats, achieving **98.2%** per-base coverage of GFF3-annotated CEN180 units across all 5 chromosomes
 - Other tools fail because CEN180 has ~25% inter-copy divergence, exceeding their mismatch tolerance thresholds
-- The remaining ~1.8% uncovered CEN180 units are dispersed (isolated) copies with autocorrelation at random level (~0.30), meaning they lack tandem repeat periodicity at the sequence level
+- The remaining ~1.8% uncovered CEN180 units are dispersed copies with autocorrelation at random level (~0.30), lacking detectable tandem repeat periodicity at the sequence level
 - bwtandem's satellite DNA scanner uses autocorrelation-based period detection that tolerates high divergence
+- Note: CEN180 units occupy 46–71% of the centromere span (the rest is retrotransposons and other non-repetitive DNA), so centromere-wide coverage metrics can be misleading
 
 ### Telomere Repeat Detection (ColCEN Assembly)
 
