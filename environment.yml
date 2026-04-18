@@ -10,7 +10,29 @@ dependencies:
   - cython
   - pip
   - trf
+  - tidehunter
+  - tantan
+  - ncrf
+  - r-base 
+  - r-stringr 
+  - r-stringi 
+  - r-stringdist 
+  - r-optparse 
+  - r-circlize 
+  - r-seqinr 
+  - r-doparallel 
+  - r-remotes
+  - mafft
+  - zlib
+  - gcc
+  - libcurl
+  - cmake
+  - bioconductor-biostrings 
+  - bioconductor-pwalign
   - setuptools
   - mreps
+  - pytest
   - pip:
       - pydivsufsort
+variables:
+  CONDA_SUBDIR: osx-64
