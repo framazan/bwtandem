@@ -1,0 +1,1266 @@
+/opt/TRASH
+TRASH will be run with /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta --o /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159 --par 2 --seqt /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/template.csv --horclass CEN159 arguments
+[1] "start"
+[1] "2026-05-21 14:13:25 PDT"
+[1] "attaching function from: /opt/TRASH/src/fn_circos.R"
+[1] "attaching function from: /opt/TRASH/src/fn_consensus_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_draw_scaffold_repeat_plots.R"
+[1] "attaching function from: /opt/TRASH/src/fn_edit_distance.R"
+[1] "attaching function from: /opt/TRASH/src/fn_export_gff.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_all_repeats.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_kmers.R"
+[1] "attaching function from: /opt/TRASH/src/fn_hash_and_reverse.R"
+[1] "attaching function from: /opt/TRASH/src/fn_HOR_wrapper.R"
+[1] "attaching function from: /opt/TRASH/src/fn_kmer_compare.R"
+[1] "attaching function from: /opt/TRASH/src/fn_movav.R"
+[1] "attaching function from: /opt/TRASH/src/fn_new_distance_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_edit.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_rep.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repeat_identifier.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repetitiveness.R"
+[1] "attaching function from: /opt/TRASH/src/fn_rev_comp_string.R"
+[1] "/opt/TRASH/libs"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta"
+[1] "Currently registered parallel backend name, version and cores"
+[1] "doParallelMC"
+[1] "1.0.17"
+[1] 2
+[1] "Sequences to analyse:"
+           file.name fasta.name
+2 Col-CEN_v1.2.fasta       Chr1
+3 Col-CEN_v1.2.fasta       Chr2
+4 Col-CEN_v1.2.fasta       Chr3
+5 Col-CEN_v1.2.fasta       Chr4
+6 Col-CEN_v1.2.fasta       Chr5
+7 Col-CEN_v1.2.fasta       ChrM
+8 Col-CEN_v1.2.fasta       ChrC
+[1] "2026-05-21 14:13:45 PDT"
+[1] "Working on sequence 1"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 14:13:45 PDT"
+[1] "Working on sequence 2"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 16:09:12 PDT"
+[1] "Working on sequence 4"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 16:44:00 PDT"
+[1] "Working on sequence 3"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 18:24:17 PDT"
+[1] "Working on sequence 6"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 18:47:07 PDT"
+[1] "Working on sequence 5"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 20:29:40 PDT"
+[1] "Working on sequence 7"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "Col-CEN_v1.2.fasta"
+[[1]]
+NULL
+
+[[2]]
+NULL
+
+[[3]]
+NULL
+
+[[4]]
+NULL
+
+[[5]]
+NULL
+
+[[6]]
+NULL
+
+[[7]]
+NULL
+
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  2996031 160.1    9030232 482.3  5467725 292.1
+Vcells 40182952 306.6   68652344 523.8 59796967 456.3
+[1] "Finished working on sequence 3"
+[1] "2026-05-21 20:29:55 PDT"
+[1] "saving repeats"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159"
+[1] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr1.csv"
+[2] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr2.csv"
+[3] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr3.csv"
+[4] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr4.csv"
+[5] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr5.csv"
+[1] "start extract repeats from Col-CEN_v1.2.fasta"
+[1] "saving regions no:"
+[1] 194
+[1] "save region:"
+[1] 1
+[1] 546
+[1] "save region:"
+[1] 2
+[1] 19
+[1] "save region:"
+[1] 3
+[1] 1
+[1] "save region:"
+[1] 4
+[1] 5
+[1] "save region:"
+[1] 5
+[1] 4
+[1] "save region:"
+[1] 6
+[1] 134
+[1] "save region:"
+[1] 7
+[1] 22
+[1] "save region:"
+[1] 8
+[1] 284
+[1] "save region:"
+[1] 9
+[1] 276
+[1] "save region:"
+[1] 10
+[1] 43
+[1] "save region:"
+[1] 11
+[1] 472
+[1] "save region:"
+[1] 12
+[1] 199
+[1] "save region:"
+[1] 13
+[1] 691
+[1] "save region:"
+[1] 14
+[1] 10
+[1] "save region:"
+[1] 15
+[1] 118
+[1] "save region:"
+[1] 16
+[1] 12120
+[1] "save region:"
+[1] 17
+[1] 10
+[1] "save region:"
+[1] 18
+[1] 16
+[1] "save region:"
+[1] 19
+[1] 222
+[1] "save region:"
+[1] 20
+[1] 649
+[1] "save region:"
+[1] 21
+[1] 18
+[1] "save region:"
+[1] 22
+[1] 905
+[1] "save region:"
+[1] 23
+[1] 179
+[1] "save region:"
+[1] 24
+[1] 723
+[1] "save region:"
+[1] 25
+[1] 1
+[1] "save region:"
+[1] 26
+[1] 35
+[1] "save region:"
+[1] 27
+[1] 141
+[1] "save region:"
+[1] 28
+[1] 4
+[1] "save region:"
+[1] 29
+[1] 5
+[1] "save region:"
+[1] 30
+[1] 254
+[1] "save region:"
+[1] 31
+[1] 99
+[1] "save region:"
+[1] 32
+[1] 53
+[1] "save region:"
+[1] 33
+[1] 2
+[1] "save region:"
+[1] 34
+[1] 1
+[1] "save region:"
+[1] 35
+[1] 8
+[1] "save region:"
+[1] 36
+[1] 6
+[1] "save region:"
+[1] 37
+[1] 3
+[1] "save region:"
+[1] 38
+[1] 27
+[1] "save region:"
+[1] 39
+[1] 496
+[1] "save region:"
+[1] 40
+[1] 40
+[1] "save region:"
+[1] 41
+[1] 13
+[1] "save region:"
+[1] 42
+[1] 24
+[1] "save region:"
+[1] 43
+[1] 5
+[1] "save region:"
+[1] 44
+[1] 15
+[1] "save region:"
+[1] 45
+[1] 2
+[1] "save region:"
+[1] 46
+[1] 6
+[1] "save region:"
+[1] 47
+[1] 36
+[1] "save region:"
+[1] 48
+[1] 508
+[1] "save region:"
+[1] 49
+[1] 2
+[1] "save region:"
+[1] 50
+[1] 3
+[1] "save region:"
+[1] 51
+[1] 16
+[1] "save region:"
+[1] 52
+[1] 12
+[1] "save region:"
+[1] 53
+[1] 16
+[1] "save region:"
+[1] 54
+[1] 2
+[1] "save region:"
+[1] 55
+[1] 6877
+[1] "save region:"
+[1] 56
+[1] 27
+[1] "save region:"
+[1] 57
+[1] 1281
+[1] "save region:"
+[1] 58
+[1] 1318
+[1] "save region:"
+[1] 59
+[1] 2776
+[1] "save region:"
+[1] 60
+[1] 423
+[1] "save region:"
+[1] 61
+[1] 33
+[1] "save region:"
+[1] 62
+[1] 24
+[1] "save region:"
+[1] 63
+[1] 96
+[1] "save region:"
+[1] 64
+[1] 34
+[1] "save region:"
+[1] 65
+[1] 3
+[1] "save region:"
+[1] 66
+[1] 3
+[1] "save region:"
+[1] 67
+[1] 79
+[1] "save region:"
+[1] 68
+[1] 5
+[1] "save region:"
+[1] 69
+[1] 88
+[1] "save region:"
+[1] 70
+[1] 5
+[1] "save region:"
+[1] 71
+[1] 5
+[1] "save region:"
+[1] 72
+[1] 5
+[1] "save region:"
+[1] 73
+[1] 19
+[1] "save region:"
+[1] 74
+[1] 16
+[1] "save region:"
+[1] 75
+[1] 512
+[1] "save region:"
+[1] 76
+[1] 52
+[1] "save region:"
+[1] 77
+[1] 40
+[1] "save region:"
+[1] 78
+[1] 5
+[1] "save region:"
+[1] 79
+[1] 7
+[1] "save region:"
+[1] 80
+[1] 34
+[1] "save region:"
+[1] 81
+[1] 4
+[1] "save region:"
+[1] 82
+[1] 34
+[1] "save region:"
+[1] 83
+[1] 2
+[1] "save region:"
+[1] 84
+[1] 10
+[1] "save region:"
+[1] 85
+[1] 74
+[1] "save region:"
+[1] 86
+[1] 608
+[1] "save region:"
+[1] 87
+[1] 441
+[1] "save region:"
+[1] 88
+[1] 3471
+[1] "save region:"
+[1] 89
+[1] 1773
+[1] "save region:"
+[1] 90
+[1] 5500
+[1] "save region:"
+[1] 91
+[1] 13
+[1] "save region:"
+[1] 92
+[1] 14
+[1] "save region:"
+[1] 93
+[1] 14
+[1] "save region:"
+[1] 94
+[1] 183
+[1] "save region:"
+[1] 95
+[1] 12
+[1] "save region:"
+[1] 96
+[1] 56
+[1] "save region:"
+[1] 97
+[1] 17
+[1] "save region:"
+[1] 98
+[1] 3
+[1] "save region:"
+[1] 99
+[1] 397
+[1] "save region:"
+[1] 100
+[1] 94
+[1] "save region:"
+[1] 101
+[1] 40
+[1] "save region:"
+[1] 102
+[1] 15
+[1] "save region:"
+[1] 103
+[1] 3
+[1] "save region:"
+[1] 104
+[1] 10
+[1] "save region:"
+[1] 105
+[1] 20
+[1] "save region:"
+[1] 106
+[1] 8
+[1] "save region:"
+[1] 107
+[1] 12
+[1] "save region:"
+[1] 108
+[1] 15
+[1] "save region:"
+[1] 109
+[1] 464
+[1] "save region:"
+[1] 110
+[1] 502
+[1] "save region:"
+[1] 111
+[1] 15
+[1] "save region:"
+[1] 112
+[1] 27
+[1] "save region:"
+[1] 113
+[1] 30
+[1] "save region:"
+[1] 114
+[1] 66
+[1] "save region:"
+[1] 115
+[1] 22
+[1] "save region:"
+[1] 116
+[1] 156
+[1] "save region:"
+[1] 117
+[1] 2325
+[1] "save region:"
+[1] 118
+[1] 1794
+[1] "save region:"
+[1] 119
+[1] 6617
+[1] "save region:"
+[1] 120
+[1] 12
+[1] "save region:"
+[1] 121
+[1] 105
+[1] "save region:"
+[1] 122
+[1] 82
+[1] "save region:"
+[1] 123
+[1] 1403
+[1] "save region:"
+[1] 124
+[1] 258
+[1] "save region:"
+[1] 125
+[1] 2656
+[1] "save region:"
+[1] 126
+[1] 16
+[1] "save region:"
+[1] 127
+[1] 236
+[1] "save region:"
+[1] 128
+[1] 63
+[1] "save region:"
+[1] 129
+[1] 29
+[1] "save region:"
+[1] 130
+[1] 35
+[1] "save region:"
+[1] 131
+[1] 23
+[1] "save region:"
+[1] 132
+[1] 667
+[1] "save region:"
+[1] 133
+[1] 510
+[1] "save region:"
+[1] 134
+[1] 89
+[1] "save region:"
+[1] 135
+[1] 218
+[1] "save region:"
+[1] 136
+[1] 26
+[1] "save region:"
+[1] 137
+[1] 101
+[1] "save region:"
+[1] 138
+[1] 28
+[1] "save region:"
+[1] 139
+[1] 2
+[1] "save region:"
+[1] 140
+[1] 6
+[1] "save region:"
+[1] 141
+[1] 3
+[1] "save region:"
+[1] 142
+[1] 13
+[1] "save region:"
+[1] 143
+[1] 36
+[1] "save region:"
+[1] 144
+[1] 10
+[1] "save region:"
+[1] 145
+[1] 42
+[1] "save region:"
+[1] 146
+[1] 31
+[1] "save region:"
+[1] 147
+[1] 207
+[1] "save region:"
+[1] 148
+[1] 68
+[1] "save region:"
+[1] 149
+[1] 33
+[1] "save region:"
+[1] 150
+[1] 77
+[1] "save region:"
+[1] 151
+[1] 63
+[1] "save region:"
+[1] 152
+[1] 258
+[1] "save region:"
+[1] 153
+[1] 12
+[1] "save region:"
+[1] 154
+[1] 320
+[1] "save region:"
+[1] 155
+[1] 503
+[1] "save region:"
+[1] 156
+[1] 953
+[1] "save region:"
+[1] 157
+[1] 195
+[1] "save region:"
+[1] 158
+[1] 775
+[1] "save region:"
+[1] 159
+[1] 361
+[1] "save region:"
+[1] 160
+[1] 260
+[1] "save region:"
+[1] 161
+[1] 199
+[1] "save region:"
+[1] 162
+[1] 372
+[1] "save region:"
+[1] 163
+[1] 1445
+[1] "save region:"
+[1] 164
+[1] 1177
+[1] "save region:"
+[1] 165
+[1] 655
+[1] "save region:"
+[1] 166
+[1] 2186
+[1] "save region:"
+[1] 167
+[1] 438
+[1] "save region:"
+[1] 168
+[1] 45
+[1] "save region:"
+[1] 169
+[1] 98
+[1] "save region:"
+[1] 170
+[1] 691
+[1] "save region:"
+[1] 171
+[1] 28
+[1] "save region:"
+[1] 172
+[1] 162
+[1] "save region:"
+[1] 173
+[1] 33
+[1] "save region:"
+[1] 174
+[1] 268
+[1] "save region:"
+[1] 175
+[1] 371
+[1] "save region:"
+[1] 176
+[1] 12
+[1] "save region:"
+[1] 177
+[1] 57
+[1] "save region:"
+[1] 178
+[1] 42
+[1] "save region:"
+[1] 179
+[1] 308
+[1] "save region:"
+[1] 180
+[1] 49
+[1] "save region:"
+[1] 181
+[1] 148
+[1] "save region:"
+[1] 182
+[1] 20
+[1] "save region:"
+[1] 183
+[1] 113
+[1] "save region:"
+[1] 184
+[1] 7
+[1] "save region:"
+[1] 185
+[1] 22
+[1] "save region:"
+[1] 186
+[1] 225
+[1] "save region:"
+[1] 187
+[1] 15
+[1] "save region:"
+[1] 188
+[1] 75
+[1] "save region:"
+[1] 189
+[1] 6
+[1] "save region:"
+[1] 190
+[1] 11
+[1] "save region:"
+[1] 191
+[1] 6
+[1] "save region:"
+[1] 192
+[1] 9
+[1] "save region:"
+[1] 193
+[1] 396
+[1] "save region:"
+[1] 194
+[1] 4
+[1] "Export gff function"
+[1] "read repeats"
+[1] "wrtiting repeats"
+[1] "finished saving"
+[1] "edit distance"
+[1] "Available classes: CEN178, CEN159"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3008896 160.7    9030232 482.3  9030232 482.3
+Vcells 40225695 306.9   68652344 523.8 68650629 523.8
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3016428 161.1    9030232 482.3  9030232 482.3
+Vcells 40245449 307.1   68652344 523.8 68651793 523.8
+[1] "HOR function on Chr1, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "HOR function on Chr2, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "no repeats of the name Chr2 and class CEN159"
+[1] "HOR function on Chr4, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Running HOR software"
+***********************************************************************
+*                     HOR identification software                     *
+*                                V3.3                                 *
+*        Single file input split into repeats from two regions        *
+*  Repeats need to have their direction set in the name as D1 or D2!  *
+***********************************************************************
+
+
+Comparing repeats from the folder: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/
+file: aligned_Col-CEN_v1.2.fasta_Chr4_CEN159.fasta, repeats split after repeat no: 1, threshold: 25 and cutoff value: 3 type is 1 
+
+Alifile: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/aligned_Col-CEN_v1.2.fasta_Chr4_CEN159.fasta
+Checking the alignment file and calculating the number of sequences ...
+
+The length of the alignment is: 221
+
+Count of aligned sequences is: 129
+
+Allocating memory for the alignment ...
+
+Reading the alignment ...
+
+closing alignment 
+
+
+prepare the output file...
+
+The program finished in 0.000475 minutes.
+Fontconfig warning: using without calling FcInit()
+[1] "Running HOR software"
+[1] "HOR done"
+[1] "HOR function on ChrM, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "no repeats of the name ChrM and class CEN159"
+***********************************************************************
+*                     HOR identification software                     *
+*                                V3.3                                 *
+*        Single file input split into repeats from two regions        *
+*  Repeats need to have their direction set in the name as D1 or D2!  *
+***********************************************************************
+
+
+Comparing repeats from the folder: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/
+file: aligned_Col-CEN_v1.2.fasta_Chr1_CEN159.fasta, repeats split after repeat no: 1, threshold: 25 and cutoff value: 3 type is 1 
+
+Alifile: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/aligned_Col-CEN_v1.2.fasta_Chr1_CEN159.fasta
+Checking the alignment file and calculating the number of sequences ...
+
+The length of the alignment is: 226
+
+Count of aligned sequences is: 1274
+
+Allocating memory for the alignment ...
+
+Reading the alignment ...
+
+closing alignment 
+
+
+prepare the output file...
+
+The program finished in 0.033176 minutes.
+[1] "HOR done"
+[1] "HOR function on Chr3, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Running HOR software"
+***********************************************************************
+*                     HOR identification software                     *
+*                                V3.3                                 *
+*        Single file input split into repeats from two regions        *
+*  Repeats need to have their direction set in the name as D1 or D2!  *
+***********************************************************************
+
+
+Comparing repeats from the folder: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/
+file: aligned_Col-CEN_v1.2.fasta_Chr3_CEN159.fasta, repeats split after repeat no: 1, threshold: 25 and cutoff value: 3 type is 1 
+
+Alifile: /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159/HOR/aligned_Col-CEN_v1.2.fasta_Chr3_CEN159.fasta
+Checking the alignment file and calculating the number of sequences ...
+
+The length of the alignment is: 220
+
+Count of aligned sequences is: 67
+
+Allocating memory for the alignment ...
+
+Reading the alignment ...
+
+closing alignment 
+
+
+prepare the output file...
+
+The program finished in 0.000077 minutes.
+[1] "HOR done"
+[1] "HOR function on Chr5, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "no repeats of the name Chr5 and class CEN159"
+[1] "HOR function on ChrC, using repeats of class CEN159"
+[1] "min.hor.value =  3, max.divergence.value = 25"
+[1] "Repeat Identification new"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "no repeats of the name ChrC and class CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "plot repeat"
+   [1]  772  773  774  775  776  777  778  779  780  781  782  783  784  785
+  [15]  786  787  788  789  790  791  792  793  794  795  796  797  798  799
+  [29]  800  801  802  803  804  805  806  807  808  809  810  811  812  813
+  [43]  814  815  816  817  818  819  820  821  822  823  824  825  826  827
+  [57]  828  829  830  831  832  833  834  835  836  837  838  839  840  841
+  [71]  842  843  844  845  846  847  848  849  850  851  852  853  854  855
+  [85]  856  857  858  859  860  861  862  863  864  865  866  867  868  869
+  [99]  870  871  872  873  874  875  876  877  878  879  880  881  882  883
+ [113]  884  885  886  887  888  889  890  891  892  893  894  895  896  897
+ [127]  898  899  900  901  902  903  904  905  906  907  908  909  910  911
+ [141]  912  913  914  915  916  917  918  919  920  921  922  923  924  925
+ [155]  926  927  928  929  930  931  932  933  934  935  936  937  938  939
+ [169]  940  941  942  943  944  945  946  947  948  949  950  951  952  953
+ [183]  954  955  956  957  958  959  960  961  962  963  964  965  966  967
+ [197]  968  969  970  971  972  973  974  975  976  977  978  979  980  981
+ [211]  982  983  984  985  986  987  988  989  990  991  992  993  994  995
+ [225]  996  997  998  999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009
+ [239] 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023
+ [253] 1024 1025 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037
+ [267] 1038 1039 1040 1041 1042 1043 1044 1045 1046 1047 1048 1049 1050 1051
+ [281] 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065
+ [295] 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079
+ [309] 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093
+ [323] 1094 1095 1096 1097 1098 1099 1100 1101 1102 1103 1104 1105 1106 1107
+ [337] 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121
+ [351] 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 1134 1135
+ [365] 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149
+ [379] 1150 1151 1152 1153 1154 1155 1156 1157 1158 1159 1160 1161 1162 1163
+ [393] 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177
+ [407] 1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 1188 1189 1190 1191
+ [421] 1192 1193 1194 1195 1196 1197 1198 1199 1200 1201 1202 1203 1204 1205
+ [435] 1206 1207 1208 1209 1210 1211 1212 1213 1214 1215 1216 1217 1218 1219
+ [449] 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229 1230 1231 1232 1233
+ [463] 1234 1235 1236 1237 1238 1239 1240 1241 1242 1243 1244 1245 1246 1247
+ [477] 1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261
+ [491] 1262 1263 1264 1265 1266 1267 1268 1269 1270 1271 1272 1273 1274 1275
+ [505] 1276 1277 1278 1279 1280 1281 1282 1283 1284 1285 1286 1287 1288 1289
+ [519] 1290 1291 1292 1293 1294 1295 1296 1297 1298 1299 1300 1301 1302 1303
+ [533] 1304 1305 1306 1307 1308 1309 1310 1311 1312 1313 1314 1315 1316 1317
+ [547] 1318 1319 1320 1321 1322 1323 1324 1325 1326 1327 1328 1329 1330 1331
+ [561] 1332 1333 1334 1335 1336 1337 1338 1339 1340 1341 1342 1343 1344 1345
+ [575] 1346 1347 1348 1349 1350 1351 1352 1353 1354 1355 1356 1357 1358 1359
+ [589] 1360 1361 1362 1363 1364 1365 1366 1367 1368 1369 1370 1371 1372 1373
+ [603] 1374 1375 1376 1377 1378 1379 1380 1381 1382 1383 1384 1385 1386 1387
+ [617] 1388 1389 1390 1391 1392 1393 1394 1395 1396 1397 1398 1399 1400 1401
+ [631] 1402 1403 1404 1405 1406 1407 1408 1409 1410 1411 1412 1413 1414 1415
+ [645] 1416 1417 1418 1419 1420 1421 1422 1423 1424 1425 1426 1427 1428 1429
+ [659] 1430 1431 1432 1433 1434 1435 1436 1437 1438 1439 1440 1441 1442 1443
+ [673] 1444 1445 1446 1447 1448 1449 1450 1451 1452 1453 1454 1455 1456 1457
+ [687] 1458 1459 1460 1461 1462 1463 1464 1465 1466 1467 1468 1469 1470 1471
+ [701] 1472 1473 1474 1475 1476 1477 1478 1479 1480 1481 1482 1483 1484 1485
+ [715] 1486 1487 1488 1489 1490 1491 1492 1493 1494 1495 1496 1497 1498 1499
+ [729] 1500 1501 1502 1503 1504 1505 1506 1507 1508 1509 1510 1511 1512 1513
+ [743] 1514 1515 1516 1517 1518 1519 1520 1521 1522 1523 1524 1525 1526 1527
+ [757] 1528 1529 1530 1531 1532 1533 1534 1535 1536 1537 1538 1539 1540 1541
+ [771] 1542 1543 1544 1545 1546 1547 1548 1549 1550 1551 1552 1553 1554 1555
+ [785] 1556 1557 1558 1559 1560 1561 1562 1563 1564 1565 1566 1567 1568 1569
+ [799] 1570 1571 1572 1573 1574 1575 1576 1577 1578 1579 1580 1581 1582 1583
+ [813] 1584 1585 1586 1587 1588 1589 1590 1591 1592 1593 1594 1595 1596 1597
+ [827] 1598 1599 1600 1601 1602 1603 1604 1605 1606 1607 1608 1609 1610 1611
+ [841] 1612 1613 1614 1615 1616 1617 1618 1619 1620 1621 1622 1623 1624 1625
+ [855] 1626 1627 1628 1629 1630 1631 1632 1633 1634 1635 1636 1637 1638 1639
+ [869] 1640 1641 1642 1643 1644 1645 1646 1647 1648 1649 1650 1651 1652 1653
+ [883] 1654 1655 1656 1657 1658 1659 1660 1661 1662 1663 1664 1665 1666 1667
+ [897] 1668 1669 1670 1671 1672 1673 1674 1675 1676 1677 1678 1679 1680 1681
+ [911] 1682 1683 1684 1685 1686 1687 1688 1689 1690 1691 1692 1693 1694 1695
+ [925] 1696 1697 1698 1699 1700 1701 1702 1703 1704 1705 1706 1707 1708 1709
+ [939] 1710 1711 1712 1713 1714 1715 1716 1717 1718 1719 1720 1721 1722 1723
+ [953] 1724 1725 1726 1727 1728 1729 1730 1731 1732 1733 1734 1735 1736 1737
+ [967] 1738 1739 1740 1741 1742 1743 1744 1745 1746 1747 1748 1749 1750 1751
+ [981] 1752 1753 1754 1755 1756 1757 1758 1759 1760 1761 1762 1763 1764 1765
+ [995] 1766 1767 1768 1769 1770 1771 1772 1773 1774 1775 1776 1777 1778 1779
+[1009] 1780 1781 1782 1783 1784 1785 1786 1787 1788 1789 1790 1791 1792 1793
+[1023] 1794 1795 1796 1797 1798 1799 1800 1801 1802 1803 1804 1805 1806 1807
+[1037] 1808 1809 1810 1811 1812 1813 1814 1815 1816 1817 1818 1819 1820 1821
+[1051] 1822 1823 1824 1825 1826 1827 1828 1829 1830 1831 1832 1833 1834 1835
+[1065] 1836 1837 1838 1839 1840 1841 1842 1843 1844 1845 1846 1847 1848 1849
+[1079] 1850 1851 1852 1853 1854 1855 1856 1857 1858 1859 1860 1861 1862 1863
+[1093] 1864 1865 1866 1867 1868 1869 1870 1871 1872 1873 1874 1875 1876 1877
+[1107] 1878 1879 1880 1881 1882 1883 1884 1885 1886 1887 1888 1889 1890 1891
+[1121] 1892 1893 1894 1895 1896 1897 1898 1899 1900 1901 1902 1903 1904 1905
+[1135] 1906 1907 1908 1909 1910 1911 1912 1913 1914 1915 1916 1917 1918 1919
+[1149] 1920 1921 1922 1923 1924 1925 1926 1927 1928 1929 1930 1931 1932 1933
+[1163] 1934 1935 1936 1937 1938 1939 1940 1941 1942 1943 1944 1945 1946 1947
+[1177] 1948 1949 1950 1951 1952 1953 1954 1955 1956 1957 1958 1959 1960 1961
+[1191] 1962 1963 1964 1965 1966 1967 1968 1969 1970 1971 1972 1973 1974 1975
+[1205] 1976 1977 1978 1979 1980 1981 1982 1983 1984 1985 1986 1987 1988 1989
+[1219] 1990 1991 1992 1993 1994 1995 1996 1997 1998 1999 2000 2001 2002 2003
+[1233] 2004 2005 2006 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017
+[1247] 2018 2019 2020 2021 2022 2023 2024 2025 2026 2027 2028 2029 2030 2031
+[1261] 2032 2033 2034 2035 2036 2037 2038 2039 2040 2041 2042 2043 2044 2045
+   [1]  5845  6974  7576  7810  7323  6408  6052  7125  7157  6661  3208  3502
+  [13]  4492  4419  3988  5689  5544  5161  2253  3871  3493  3971  6015  5738
+  [25]  5841  4540  4564  3999  2014  3443  3083  3527  5127  4854  4687  1836
+  [37]  3907  3984  3501  3360  4301  4457  4071  1609  3052  3542  3521  3253
+  [49]  5302  5138  4946  2215  4140  4141  3444  3033  4396  4667  4467  2235
+  [61]  2696  3618  3582  3796  5009  4808  3797  3626  3602  3690  2068  4029
+  [73]  4027  3468  3073  4464  4760  4610  2421  3589  4105  3974  3806  4954
+  [85]  4712  3833  1725  3378  3794  3298  3461  4674  4984  4770  2443  3651
+  [97]  4183  4045  3902  5187  4992  3969  3887  4116  4087  2128  4040  4024
+ [109]  3450  3158  4321  4412  4196  1269  4049  5050  5243  4941  6495  6322
+ [121]  5976  3534  5741  5641  5304  3593  5822  5663  5378  2312  4916  5121
+ [133]  4870  3570  4190  4000  2154  3979  5077  5235  5268  5591  5800  3568
+ [145]  8146  8411  8534  8109  7037  8184  7059  7510  6431  8329  8622  8120
+ [157]  7460  7524  6148  7560  6474  6905  5265  6860  7030  6466  4333  5219
+ [169]  6021  5841  5381  6024  5769  4024  4391  4288  1673  1561  1127  1646
+ [181]  4168  4205  5102  4398  5515  7333  7683  7719  6989  7172  3911  2673
+ [193]  1187  1143  4266  4283  5258  4289  6388  7277  7530  7336  7325  4086
+ [205]  2793  1272  1238  4381  4402  5382  4379  6499  7391  7665  7475  7465
+ [217]  4213  3043  1919  2656  5031  4890  5696  5339  7619  8027  8134  7573
+ [229]  7738  4243  3334  1635  2518  4944  4813  5563  5326  7565  7885  7968
+ [241]  7223  7426  4664  3216  1784  2142  5097  5062  6639  6536  8869  9131
+ [253]  9113  8874  8785  6615  5073  2845  5713  5381  6921  6693  8928  9446
+ [265]  9493  9046  8804  7376  7898  6915  6501  6764  6070  5601  5740  6177
+ [277]  6155  4686  3924  4379  3433  1964  1877     0     0  2423  2675  3549
+ [289]  3658  3122  4880  4475  4285  5017  4712  4515   333  1554  1499  1403
+ [301]    12  1614  2156  2193  2145   252  1508  1460  1389    12  1247  1671
+ [313]  1873  3362  3322  2896   602  1131  1004   975   100  4750  4932  5896
+ [325]  6207  5296  5850  3067  6322  6934  6981  6584  6181  2280  5430  6047
+ [337]  7498  7423  6604  7276  7085  5772  6281  4758  5591  3044  6005  6345
+ [349]  6172  5150  4602  1992  3286  4377  6738  6823  6306  7032  7029  5718
+ [361]  6396  4717  5435  2896  5022  5102  4630  4216  1927  3364  4329  6979
+ [373]  7124  6451  7523  6998  6162  6578  4789  5608  3033  5837  6246  6209
+ [385]  4744  4115  1990  4165  3898  4308  3188  2423  1996  1292  1172   103
+ [397]  2879  3129  3298  3072  2065  2766  1599  3866  4070  3834  3586  2497
+ [409]   446  1240  1120  1100    92  1338  1556  5080  6066  7704  7685  7088
+ [421]  8205  8197  7423  8299  6734  8725  8643  8719  8286  7450  5360   813
+ [433]   562   539   259  4170  4635  6092  6313  5931  5699  1861  3525  3301
+ [445]  3510   727  3670  3991  4004  3652   530  2062  4252  4428  4430  3729
+ [457]  2625  1402  1922  1106   966     0     0     0  3128  4009  6413  6347
+ [469]  6449  5572  6812  6345  6340  6928  7084  5358  6978  6957  6470  4474
+ [481]  3799  3220     0  6497  6816  7615  7637  6505  8175  7750  8617  8664
+ [493]  8601  6052  7132  5961  6507  5525  5102  4438  3270  2472  3355  5903
+ [505]  5951  5387  5916  4471  4739  3571  3872  3635  2358  3884  4685  6501
+ [517]  6600  6373  6384  3511  4689  4350  5367  5555  4521  5468  7549  7702
+ [529]  7796  6744  6586  4333  2921   293  4353  5723  5803  6038  5981  3756
+ [541]  6114  7336  7080  5923  8098  7979  7776  6753  6754  5920  3868   798
+ [553]   949   686   186   378   331   227   197     0   906   906   906     0
+ [565]  3231  3852  4309  5369  4693  5789  6319  5889  6529  6099  6570  6018
+ [577]  3856  5073  4554  4841  5788  5267  5156   721    59  1339  1951  8793
+ [589]  9250  9675  9207  9771  9645  8048  8535  8888  8476  8974  7710  6231
+ [601]  5197  4525     0     0    84  3593  4126  4259  4219  4342  5224  5461
+ [613]  5878  5293  4647  3780    94    84     0     0  1049  1872  2517  2710
+ [625]  2745  3369  5224  5301  5323  4241  3126  1955  4263  4160  4121   591
+ [637]  4693  5195  5351  5521  3666  5056  5386  5568  4853  4139  5389  4803
+ [649]  4341  4474  1834  4748  4852  5763  6990  7489  7207  5985  5346  6832
+ [661]  6609  6620  6200  2592  3351  3346  1781  3346  3971  5324  5232  5230
+ [673]  6456  7426  7920  7518  6183  5472  6931  6716  6749  6408  2640  3386
+ [685]  3391  1793  3347  3955  5301  5206  5202  6413  7364  7847  7448  6105
+ [697]  5287  6556  6183  6314  5974  2181  2925  3034  1657  2478  4304  5515
+ [709]  5793  6279  5971  3804  5930  5502  5611  4217  2813  2882  5127  5976
+ [721]  5701  5801  2796  5140  5905  6510  7169  8505  8823  8445  7870  7577
+ [733]  7249  6666  6633  6142  6033  6281  4676  7275  7376  7393  5778  6558
+ [745]  6163  4867  4364  4986  5923  5557  5643  2227  4568  5739  6469  7172
+ [757]  8565  8846  8473  7947  7682  7635  6888  6826  6364  5618  5663  3449
+ [769]  5744  6054  7264  7475  7602  5927  4946  5963  6176  5906  4177  2307
+ [781]  3847  3674  3515  4359  3538  4099  4904  4954  6368  5888  6718  8590
+ [793]  9059  8812  7919  8773  8976  8949  8097  7828  7587  7498  6187  2220
+ [805]  2127  1132  4287  5014  5387  7001  7369  7521  6966  7041  7153  6921
+ [817]  5971   698  1134   936  2423  2653  2449  1341  3000  3162  2828  2083
+ [829]  6967  8364  8704  8516  8398  9942 10020  9433  9330 10871 10853 10155
+ [841]  9902 10863 10563  9415  8785  9504  8824  8083  7337  5557  6429  5839
+ [853]  5371  1942  4934  4960  5487  5099  3487  3594  3587  3105  2043  6677
+ [865]  7907  8330  7876  7581  8692  8836  8121  7821  8713  8325  7978  7677
+ [877]  5914  6984  6720  7500  7490  8015  7471  7544  6702  3840  2742  1303
+ [889]  3309  3851  4505  5309  4994  3823  2027  5923  6901  6973  7209  6748
+ [901]  5831  6567  5815  5137  5633  5568  5568  5483  4669  6159  5905  6079
+ [913]  5834  5181  3810  1167  5803  8188  8639  8451  8647  9409  9365  9325
+ [925]  8615  7074  8260  8204  6909  6673  6355  6693  8514  8715  9729  9431
+ [937]  9522  9907 10028  8353  6734  8108  7652  7587  7793  6333  4373  5632
+ [949]  5136  6048  5701  6158  8460  8492  8762  8955  7699  6509  7964  7597
+ [961]  7477  7703  6269  4306  5544  4992  5806  5409  5552  7220  7032  6971
+ [973]  7438  6034  5856  7635  7494  7627  7801  6273  5931  7758  7603  7950
+ [985]  7977  5782  5772  7472  7312  7435  7623  6116  5712  7221  6988  7018
+ [997]  7085  5383  4065  4266  2775  4233  3883  3663  4419  3863  4741  4402
+[1009]  4503  5820  5548  5932  6075  4870  3701  3957  2630  4173  3841  3957
+[1021]  4892  4501  5317  4793  4917  6487  6285  6360  6489  5075  3802  3865
+[1033]  2625  4139  4068  4652  6154  6043  6205  6346  4986  3787  3863  2632
+[1045]  4173  4123  4675  6255  6080  6194  6301  4915  3687  3714  2459  3525
+[1057]  3639  3938  4935  4415  4712  4989  4188  3408  3723  2837  3098  3150
+[1069]  1500  3416  3726  3804  2917  2701  2419     0   113  2417  3041  3316
+[1081]  2948  1462  3498  3401  4208  3798  3235  1559  1623  1315  1453   770
+[1093]  2058  3507  5193  5839  5783  4755  3701  4669  4762  4658  4551  2038
+[1105]  2834  3321  4358  4161  3579  1492  3268  3090  2943  3644  4360  6205
+[1117]  7101  7135  7043  4591  3304  4259  5018  6840  6684  7218  7053  6929
+[1129]  2068  4245  5880  8041  9465  9190 10249 10112 10677  8951 10013  9912
+[1141]  9798  5960  4095  4984  5927  7261  6890  7347  7052  6907  1797  1981
+[1153]  1542  1358    92  2051  2177  2399  1016  1474  1261  1173   100  3268
+[1165]  3640  4387  3573  4589  6169  6259  6266  4222  4052  3133  2879  2653
+[1177]    81  4009  4337  6489  6522  5922  8386  8730  8792  7739  8232  8029
+[1189]  7675  1940  1596  1199  1058   152  5569  6303  8689  8928  8667 10250
+[1201] 10131 10472 10374  8852  9388  8959  8557  1357  1715  1439  1328   163
+[1213]  4620  5017  7623  7829  7664  8954  8754  8799  6764  6950  9016  9255
+[1225]  9195  7293  8188  7883  7557  1952  2101  1610  1460   164  4947  5343
+[1237]  8369  8574  8432  9834  9567 10138 10068  8695  9184  8891  8492  2119
+[1249]  2183  1603  1448   148  3996  4354  6667  6902  6606  6979  6430  6180
+[1261]  3838    60  4055  4320  4354  4189   448   598  3737  4641  4913  4922
+[1273]  4226  2157
+ [1] 4395.532 4089.746 5636.635 5236.937 5549.300 3857.111 4067.873 4618.778
+ [9] 5428.825 3958.636      NaN 2685.778 6021.853      NaN      NaN      NaN
+[17] 4092.857 5191.952 6019.803 6732.034 5878.400 7122.323 5635.302 4202.167
+[25] 2336.688 5403.429 5008.891      NaN
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "plot repeat"
+ [1] 33131 33132 33133 33134 33135 33136 33137 33138 33139 33140 33141 33142
+[13] 33143 33144 33145 33159 33160 33161 33162 33163 33164 33165 33166 33167
+[25] 33168 33169 33170 33171 33172 33173 33174 33175 33176 33177 33178 33179
+[37] 33180 33181 33182 33183 33184 33185 33186 33187 33188 33189 33190 33191
+[49] 33192 33193 33194 33195 33196 33197 33198 33199 33200 33201 33202 33203
+[61] 33204 33205 33206 33207 33208 33209 33210
+ [1]  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  9 12 12  3  0  0  0  0  0
+[26]  0 33 45 48 37 17 16 16 12  0  0  7 26 31 47 46 45 50 54 54 51 37 37 31 27
+[51] 23 37 46 55 43 26  5  0  3 12 27 31 45 33 30 11  0
+  [1]   0 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+ [19] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+ [37] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+ [55] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+ [73] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+ [91] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[109] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[127] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[145] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[163] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[181] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[199] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[217] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[235] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[253] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[271] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[289] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[307] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[325] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[343] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[361] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[379] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[397] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[415] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[433] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[451] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[469] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[487] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[505] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[523] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[541] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[559] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[577] NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+[595] NaN NaN NaN NaN NaN NaN NaN
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "plot repeat"
+  [1] 46135 46136 64105 64106 64107 64108 64109 64110 64111 64112 64113 64114
+ [13] 64115 64116 64117 64118 64119 64120 64121 64122 64123 64124 64125 64126
+ [25] 64127 64128 64129 64130 64131 64132 64133 64134 64135 64136 64137 64138
+ [37] 64139 64140 64141 64142 64143 64144 64145 64146 64147 64148 64149 64150
+ [49] 64151 64152 64153 64154 64155 64156 64157 64158 64159 64160 64161 64162
+ [61] 64163 64164 64165 64166 64167 64168 64169 64170 64171 64172 64173 64174
+ [73] 64175 64176 64177 64178 64179 64180 64181 64182 64183 64184 64185 64186
+ [85] 64187 64188 64189 64190 64191 64192 64193 64194 64195 64196 64197 64198
+ [97] 64199 64200 64201 64202 64203 64204 64205 64206 64207 64208 64209 64210
+[109] 64211 64212 64213 64214 64215 64216 64217 64218 64219 64220 64221 64222
+[121] 64223 64224 64225 64226 64227 64228 64229 64230 64231
+  [1]   0   0   0   8 103 169 205 152 176 177 106 127 201 190 157 115   4 151
+ [19] 179 189 141 220 227 253 177 147  87  12  50  87 102  82  92  37  84  77
+ [37]  80   3  59  72  81  45  13   0   0   0   0   0  68 180 216 204 165 104
+ [55]  30  57  57  57   0   0  56  74  97 119 195 201 344 350 379 335 267 131
+ [73]  67 134 240 281 312 264 287 208 219 177 137 227 201 181  32  32  32 146
+ [91] 160 172  98  72  47  76 132 185 220 304 362 408 357 288 134  63  77 157
+[109] 169 182 130 139 168 142 141  80 182 194 187 123  58  32 194 204 213  85
+[127]  81  22   0
+  [1]   0.0000      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+  [9]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [17]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [25]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [33]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [41]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [49]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [57]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [65]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [73]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [81]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [89]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+ [97]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[105]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[113]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[121]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[129]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[137]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[145]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[153]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[161]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[169]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[177]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[185]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[193]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[201]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[209]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[217]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[225]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[233]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[241]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[249]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[257]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[265]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[273]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[281]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[289]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[297]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[305]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[313]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[321]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[329]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[337]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[345]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[353]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[361]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[369]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[377]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[385]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[393]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[401]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[409]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[417]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[425]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[433]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[441]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[449]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[457]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[465]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[473]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[481]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[489]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[497]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[505]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[513]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[521]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[529]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[537]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[545]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[553]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[561]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[569]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[577]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[585]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[593]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[601]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[609]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[617]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[625]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[633]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[641]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[649]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[657]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[665]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[673]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[681]      NaN      NaN      NaN      NaN      NaN      NaN      NaN      NaN
+[689]      NaN      NaN 141.2692      NaN      NaN      NaN  71.0000 172.4603
+[697]      NaN
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "Available classes: "       "Available classes: CEN178"
+[3] "Available classes: CEN159"
+[1] "plotting"
+[1] "circos"
+[1] "identify chromosomes"
+[1] "Identify main peaks"
+[1] "Merge peaks"
+[1] "export data"
+[1] "Circos Plotting"
+[1] "set sectors"
+[1] "generate circos plot"
+[1] "1"
+[1] "2"
+[1] "3"
+[1] "4"
+[1] "5"
+[1] "genomic track"
+[1] "leftover repeats"
+[1] "plot leftovers"
+[1] "Col-CEN_v1.2.fasta plots done"
+[1] "finished plotting"
+[1] "TRASH finished, exiting"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3062835 163.6    9030232 482.3  9030232 482.3
+Vcells 40356059 307.9   82462812 629.2 73552216 561.2
+	Command being timed: "singularity exec ./bwtbench.sif TRASH_run.sh /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta --o /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_CEN159 --par 2 --seqt /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/template.csv --horclass CEN159"
+	User time (seconds): 37681.42
+	System time (seconds): 99.03
+	Percent of CPU this job got: 166%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 6:18:29
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1389316
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 49811535
+	Voluntary context switches: 234902
+	Involuntary context switches: 76395
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

@@ -1,0 +1,59 @@
+/opt/TRASH
+TRASH will be run with /data/gpfs/assoc/pgl/filip/bwtandem/Zm/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna --o /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_trash_denovo_exp3C_centc --par 2 --def arguments
+[1] "start"
+[1] "2026-05-25 17:26:02 PDT"
+[1] "attaching function from: /opt/TRASH/src/fn_circos.R"
+[1] "attaching function from: /opt/TRASH/src/fn_consensus_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_draw_scaffold_repeat_plots.R"
+[1] "attaching function from: /opt/TRASH/src/fn_edit_distance.R"
+[1] "attaching function from: /opt/TRASH/src/fn_export_gff.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_all_repeats.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_kmers.R"
+[1] "attaching function from: /opt/TRASH/src/fn_hash_and_reverse.R"
+[1] "attaching function from: /opt/TRASH/src/fn_HOR_wrapper.R"
+[1] "attaching function from: /opt/TRASH/src/fn_kmer_compare.R"
+[1] "attaching function from: /opt/TRASH/src/fn_movav.R"
+[1] "attaching function from: /opt/TRASH/src/fn_new_distance_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_edit.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_rep.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repeat_identifier.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repetitiveness.R"
+[1] "attaching function from: /opt/TRASH/src/fn_rev_comp_string.R"
+[1] "/opt/conda/lib/R/library"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/Zm/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"
+[1] "Currently registered parallel backend name, version and cores"
+[1] "doParallelMC"
+[1] "1.0.17"
+[1] 2
+[1] "Sequences to analyse:"
+                                                        file.name fasta.name
+2  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039150.1
+3  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039151.1
+4  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039152.1
+5  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039153.1
+6  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039154.1
+7  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039155.1
+8  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039156.1
+9  GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039157.1
+10 GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039158.1
+11 GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna CM039159.1
+[1] "2026-05-25 17:30:04 PDT"
+[1] "Working on sequence 1"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_trash_denovo_exp3C_centc"
+[1] "GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"
+[1] "2026-05-25 17:30:04 PDT"
+[1] "Working on sequence 2"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_trash_denovo_exp3C_centc"
+[1] "GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"
+[1] "2026-05-26 09:55:21 PDT"
+[1] "Working on sequence 3"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_trash_denovo_exp3C_centc"
+[1] "GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"
+[1] "2026-05-26 11:15:28 PDT"
+[1] "Working on sequence 4"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_trash_denovo_exp3C_centc"
+[1] "GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"

@@ -1,0 +1,49 @@
+Tool,Genome,Experiment,Wall_Time_s,Max_RSS_GB,CPU_Percent
+trf,Mo17,Exp3B,19851.0,1.2,99%
+trf,Col-CEN,Exp2,475020.0,1.26,99%
+trf,Mo17,Exp3C,19736.0,1.2,99%
+trf,GRCh38 (GCA),Exp1,121426.0,1.45,99%
+trf,Mo17,Exp3A,18781.0,1.2,100%
+trf,GRCh38 (GCF),Exp1,121514.0,1.45,99%
+mreps,Col-CEN,Exp2,848.71,0.84,99%
+mreps,Col-CEN,Exp2,210.26,0.35,99%
+mreps,Mo17,unknown,0.0,0.0,0%
+mreps,Mo17,unknown,0.0,0.0,0%
+mreps,GRCh38 (GCA),Exp1,3281.08,6.38,99%
+mreps,Mo17,unknown,0.0,0.0,0%
+mreps,Mo17,unknown,0.0,0.0,0%
+mreps,GRCh38 (GCF),Exp1,3270.65,6.38,99%
+ultra,Col-CEN,Exp2,4802.0,1.68,199%
+ultra,Mo17,Exp3A,827.86,2.23,198%
+ultra,GRCh38 (GCA),Exp1,107209.0,1.68,199%
+ultra,Mo17,Exp3B,125036.0,9.68,199%
+ultra,GRCh38 (GCF),Exp1,98659.0,1.68,199%
+ultra,Mo17,Exp3C,46284.0,3.38,199%
+bwtandem,Col-CEN,Exp2,705.2,5.32,185%
+bwtandem,Mo17,Exp3C,15358.0,45.53,100%
+bwtandem,Mo17,Exp3A,3190.52,45.61,101%
+bwtandem,GRCh38 (GCA),Exp1,17566.0,41.98,199%
+bwtandem,Mo17,Exp3B,13772.0,47.01,100%
+bwtandem,GRCh38 (GCF),Exp1,17603.0,41.98,199%
+tantan,Mo17,Exp3B,1968.4,0.5,99%
+tantan,Col-CEN,Exp2,137.79,0.04,99%
+tantan,GRCh38 (GCA),Exp1,3106.94,0.27,99%
+tantan,GRCh38 (GCF),Exp1,3374.94,0.27,99%
+tantan,Mo17,Exp3C,2110.63,0.5,99%
+tantan,Mo17,Exp3A,1973.47,0.5,99%
+ncrf,Col-CEN,Exp2,2863.63,80.96,99%
+ncrf,Mo17,Exp3A,473.91,17.47,99%
+ncrf,Mo17,Exp3C,1.83,0.29,99%
+ncrf,Mo17,Exp3B,2.25,0.29,85%
+trash,Col-CEN,Exp2,91360.0,2.63,151%
+trash,Mo17,Exp3B,366282.0,120.64,162%
+trash,Col-CEN,Exp2,20850.0,1.29,166%
+trash,Mo17,Exp3A,215469.0,12.78,188%
+trash,GRCh38 (GCA),Exp1,387456.0,14.59,194%
+trash,Mo17,Exp3A,235812.0,12.78,186%
+trash,Mo17,Exp3C,351900.0,42.83,164%
+trash,Mo17,Exp3B,211842.0,12.78,187%
+trash,Col-CEN,Exp2,22709.0,1.32,166%
+trash,Mo17,Exp3C,0.0,0.0,0%
+trash,Mo17,Exp3B,227175.0,12.95,185%
+trash,GRCh38 (GCF),Exp1,401872.0,14.59,194%

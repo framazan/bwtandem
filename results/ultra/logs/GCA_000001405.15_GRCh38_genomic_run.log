@@ -1,0 +1,36 @@
+----------------------------
+Maximum repeat period: 100
+Number of model states: 1970
+Total sequence window size: 100200
+DP matrix cells: 197394000
+Threads: 2
+Sequence window queue length: 1024
+Total size: 1.57 GB (1681756800 bytes)
+----------------------------
+*Actual memory usage will be slightly greater due to output repeat queue and repeat split matrices
+============================
+----------------------------
+Annotation Coverage: 0.0494 (158559280 / 3209286105)
+	Command being timed: "singularity exec ./bwtbench.sif ultra -t 2 -o benchmarking_results/ultra/results/GCA_000001405.15_GRCh38_genomic_output.tsv /data/gpfs/assoc/pgl/filip/bwtandem/ncbi_dataset/data/GCA_000001405.15/GCA_000001405.15_GRCh38_genomic.fna"
+	User time (seconds): 213726.63
+	System time (seconds): 671.90
+	Percent of CPU this job got: 199%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 29:46:49
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1758540
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 733406331
+	Voluntary context switches: 7270
+	Involuntary context switches: 498555
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

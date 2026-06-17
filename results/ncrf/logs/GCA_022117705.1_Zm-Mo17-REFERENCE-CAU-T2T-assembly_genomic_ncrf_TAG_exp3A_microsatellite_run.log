@@ -1,0 +1,53 @@
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039150.1.fa
+(50 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039151.1.fa
+(74 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039152.1.fa
+(0 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039153.1.fa
+(86 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039154.1.fa
+(2 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039155.1.fa
+(1 alignment reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039156.1.fa
+(1 alignment reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039157.1.fa
+(0 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039158.1.fa
+(0 alignments reported)
+NCRF record: benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records/CM039159.1.fa
+(0 alignments reported)
+	Command being timed: "bash -c 
+        set -euo pipefail
+        split_dir=$1
+        sif=$2
+        out_ncrf=$3
+        shift 3
+        for record in "$split_dir"/*.fa; do
+            echo "NCRF record: ${record}" >&2
+            singularity exec "$sif" NCRF "$@" < "$record" >> "$out_ncrf"
+        done
+     bash benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite_ncrf_records ./bwtbench.sif benchmarking_results/ncrf/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ncrf_TAG_exp3A_microsatellite.ncrf TAG:TAG --minlength=200"
+	User time (seconds): 444.33
+	System time (seconds): 28.89
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 7:53.91
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 18313536
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 618408
+	Voluntary context switches: 18002
+	Involuntary context switches: 322
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

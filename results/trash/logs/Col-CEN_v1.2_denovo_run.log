@@ -1,0 +1,770 @@
+/opt/TRASH
+TRASH will be run with /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta --o /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo --par 2 arguments
+[1] "start"
+[1] "2026-05-21 14:13:25 PDT"
+[1] "attaching function from: /opt/TRASH/src/fn_circos.R"
+[1] "attaching function from: /opt/TRASH/src/fn_consensus_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_draw_scaffold_repeat_plots.R"
+[1] "attaching function from: /opt/TRASH/src/fn_edit_distance.R"
+[1] "attaching function from: /opt/TRASH/src/fn_export_gff.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_all_repeats.R"
+[1] "attaching function from: /opt/TRASH/src/fn_extract_kmers.R"
+[1] "attaching function from: /opt/TRASH/src/fn_hash_and_reverse.R"
+[1] "attaching function from: /opt/TRASH/src/fn_HOR_wrapper.R"
+[1] "attaching function from: /opt/TRASH/src/fn_kmer_compare.R"
+[1] "attaching function from: /opt/TRASH/src/fn_movav.R"
+[1] "attaching function from: /opt/TRASH/src/fn_new_distance_N.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_edit.R"
+[1] "attaching function from: /opt/TRASH/src/fn_plot_rep.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repeat_identifier.R"
+[1] "attaching function from: /opt/TRASH/src/fn_repetitiveness.R"
+[1] "attaching function from: /opt/TRASH/src/fn_rev_comp_string.R"
+[1] "/opt/TRASH/libs"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta"
+[1] "Currently registered parallel backend name, version and cores"
+[1] "doParallelMC"
+[1] "1.0.17"
+[1] 2
+[1] "Sequences to analyse:"
+           file.name fasta.name
+2 Col-CEN_v1.2.fasta       Chr1
+3 Col-CEN_v1.2.fasta       Chr2
+4 Col-CEN_v1.2.fasta       Chr3
+5 Col-CEN_v1.2.fasta       Chr4
+6 Col-CEN_v1.2.fasta       Chr5
+7 Col-CEN_v1.2.fasta       ChrM
+8 Col-CEN_v1.2.fasta       ChrC
+[1] "2026-05-21 14:13:45 PDT"
+[1] "Working on sequence 1"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 14:13:45 PDT"
+[1] "Working on sequence 2"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 16:05:14 PDT"
+[1] "Working on sequence 4"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 16:36:22 PDT"
+[1] "Working on sequence 3"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 18:05:41 PDT"
+[1] "Working on sequence 6"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 18:31:42 PDT"
+[1] "Working on sequence 5"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[1] "2026-05-21 19:59:39 PDT"
+[1] "Working on sequence 7"
+[1] "Repeat Identification new"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "Col-CEN_v1.2.fasta"
+[[1]]
+NULL
+
+[[2]]
+NULL
+
+[[3]]
+NULL
+
+[[4]]
+NULL
+
+[[5]]
+NULL
+
+[[6]]
+NULL
+
+[[7]]
+NULL
+
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  2995834 160.0    9030224 482.3  5429513 290.0
+Vcells 40182512 306.6   68652320 523.8 59779778 456.1
+[1] "Finished working on sequence 1"
+[1] "2026-05-21 19:59:54 PDT"
+[1] "saving repeats"
+[1] "/data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo"
+[1] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr1.csv"
+[2] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr2.csv"
+[3] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr3.csv"
+[4] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr4.csv"
+[5] "./Col-CEN_v1.2.fasta_out/Regions_Col-CEN_v1.2.fasta_Chr5.csv"
+[1] "start extract repeats from Col-CEN_v1.2.fasta"
+[1] "saving regions no:"
+[1] 199
+[1] "save region:"
+[1] 1
+[1] 546
+[1] "save region:"
+[1] 2
+[1] 11
+[1] "save region:"
+[1] 3
+[1] 5
+[1] "save region:"
+[1] 4
+[1] 4
+[1] "save region:"
+[1] 5
+[1] 83
+[1] "save region:"
+[1] 6
+[1] 22
+[1] "save region:"
+[1] 7
+[1] 285
+[1] "save region:"
+[1] 8
+[1] 277
+[1] "save region:"
+[1] 9
+[1] 44
+[1] "save region:"
+[1] 10
+[1] 491
+[1] "save region:"
+[1] 11
+[1] 199
+[1] "save region:"
+[1] 12
+[1] 691
+[1] "save region:"
+[1] 13
+[1] 11
+[1] "save region:"
+[1] 14
+[1] 118
+[1] "save region:"
+[1] 15
+[1] 12114
+[1] "save region:"
+[1] 16
+[1] 10
+[1] "save region:"
+[1] 17
+[1] 21
+[1] "save region:"
+[1] 18
+[1] 55
+[1] "save region:"
+[1] 19
+[1] 567
+[1] "save region:"
+[1] 20
+[1] 673
+[1] "save region:"
+[1] 21
+[1] 348
+[1] "save region:"
+[1] 22
+[1] 1265
+[1] "save region:"
+[1] 23
+[1] 35
+[1] "save region:"
+[1] 24
+[1] 61
+[1] "save region:"
+[1] 25
+[1] 4
+[1] "save region:"
+[1] 26
+[1] 5
+[1] "save region:"
+[1] 27
+[1] 254
+[1] "save region:"
+[1] 28
+[1] 99
+[1] "save region:"
+[1] 29
+[1] 55
+[1] "save region:"
+[1] 30
+[1] 15
+[1] "save region:"
+[1] 31
+[1] 2
+[1] "save region:"
+[1] 32
+[1] 8
+[1] "save region:"
+[1] 33
+[1] 10
+[1] "save region:"
+[1] 34
+[1] 2
+[1] "save region:"
+[1] 35
+[1] 6
+[1] "save region:"
+[1] 36
+[1] 10
+[1] "save region:"
+[1] 37
+[1] 468
+[1] "save region:"
+[1] 38
+[1] 37
+[1] "save region:"
+[1] 39
+[1] 11
+[1] "save region:"
+[1] 40
+[1] 8
+[1] "save region:"
+[1] 41
+[1] 29
+[1] "save region:"
+[1] 42
+[1] 5
+[1] "save region:"
+[1] 43
+[1] 15
+[1] "save region:"
+[1] 44
+[1] 8
+[1] "save region:"
+[1] 45
+[1] 4
+[1] "save region:"
+[1] 46
+[1] 36
+[1] "save region:"
+[1] 47
+[1] 508
+[1] "save region:"
+[1] 48
+[1] 3
+[1] "save region:"
+[1] 49
+[1] 19
+[1] "save region:"
+[1] 50
+[1] 11
+[1] "save region:"
+[1] 51
+[1] 17
+[1] "save region:"
+[1] 52
+[1] 8
+[1] "save region:"
+[1] 53
+[1] 6876
+[1] "save region:"
+[1] 54
+[1] 22
+[1] "save region:"
+[1] 55
+[1] 1281
+[1] "save region:"
+[1] 56
+[1] 1318
+[1] "save region:"
+[1] 57
+[1] 2777
+[1] "save region:"
+[1] 58
+[1] 423
+[1] "save region:"
+[1] 59
+[1] 33
+[1] "save region:"
+[1] 60
+[1] 24
+[1] "save region:"
+[1] 61
+[1] 96
+[1] "save region:"
+[1] 62
+[1] 35
+[1] "save region:"
+[1] 63
+[1] 4
+[1] "save region:"
+[1] 64
+[1] 4
+[1] "save region:"
+[1] 65
+[1] 11
+[1] "save region:"
+[1] 66
+[1] 7
+[1] "save region:"
+[1] 67
+[1] 79
+[1] "save region:"
+[1] 68
+[1] 5
+[1] "save region:"
+[1] 69
+[1] 106
+[1] "save region:"
+[1] 70
+[1] 5
+[1] "save region:"
+[1] 71
+[1] 10
+[1] "save region:"
+[1] 72
+[1] 3
+[1] "save region:"
+[1] 73
+[1] 58
+[1] "save region:"
+[1] 74
+[1] 6
+[1] "save region:"
+[1] 75
+[1] 13
+[1] "save region:"
+[1] 76
+[1] 512
+[1] "save region:"
+[1] 77
+[1] 10
+[1] "save region:"
+[1] 78
+[1] 40
+[1] "save region:"
+[1] 79
+[1] 3
+[1] "save region:"
+[1] 80
+[1] 5
+[1] "save region:"
+[1] 81
+[1] 6
+[1] "save region:"
+[1] 82
+[1] 15
+[1] "save region:"
+[1] 83
+[1] 4
+[1] "save region:"
+[1] 84
+[1] 41
+[1] "save region:"
+[1] 85
+[1] 2
+[1] "save region:"
+[1] 86
+[1] 56
+[1] "save region:"
+[1] 87
+[1] 5
+[1] "save region:"
+[1] 88
+[1] 605
+[1] "save region:"
+[1] 89
+[1] 442
+[1] "save region:"
+[1] 90
+[1] 3478
+[1] "save region:"
+[1] 91
+[1] 1780
+[1] "save region:"
+[1] 92
+[1] 5505
+[1] "save region:"
+[1] 93
+[1] 13
+[1] "save region:"
+[1] 94
+[1] 14
+[1] "save region:"
+[1] 95
+[1] 15
+[1] "save region:"
+[1] 96
+[1] 183
+[1] "save region:"
+[1] 97
+[1] 12
+[1] "save region:"
+[1] 98
+[1] 57
+[1] "save region:"
+[1] 99
+[1] 17
+[1] "save region:"
+[1] 100
+[1] 3
+[1] "save region:"
+[1] 101
+[1] 397
+[1] "save region:"
+[1] 102
+[1] 86
+[1] "save region:"
+[1] 103
+[1] 18
+[1] "save region:"
+[1] 104
+[1] 12
+[1] "save region:"
+[1] 105
+[1] 3
+[1] "save region:"
+[1] 106
+[1] 10
+[1] "save region:"
+[1] 107
+[1] 21
+[1] "save region:"
+[1] 108
+[1] 11
+[1] "save region:"
+[1] 109
+[1] 12
+[1] "save region:"
+[1] 110
+[1] 12
+[1] "save region:"
+[1] 111
+[1] 538
+[1] "save region:"
+[1] 112
+[1] 503
+[1] "save region:"
+[1] 113
+[1] 15
+[1] "save region:"
+[1] 114
+[1] 27
+[1] "save region:"
+[1] 115
+[1] 30
+[1] "save region:"
+[1] 116
+[1] 66
+[1] "save region:"
+[1] 117
+[1] 22
+[1] "save region:"
+[1] 118
+[1] 156
+[1] "save region:"
+[1] 119
+[1] 14
+[1] "save region:"
+[1] 120
+[1] 2653
+[1] "save region:"
+[1] 121
+[1] 16
+[1] "save region:"
+[1] 122
+[1] 1794
+[1] "save region:"
+[1] 123
+[1] 6616
+[1] "save region:"
+[1] 124
+[1] 15
+[1] "save region:"
+[1] 125
+[1] 105
+[1] "save region:"
+[1] 126
+[1] 81
+[1] "save region:"
+[1] 127
+[1] 1403
+[1] "save region:"
+[1] 128
+[1] 259
+[1] "save region:"
+[1] 129
+[1] 2643
+[1] "save region:"
+[1] 130
+[1] 18
+[1] "save region:"
+[1] 131
+[1] 236
+[1] "save region:"
+[1] 132
+[1] 64
+[1] "save region:"
+[1] 133
+[1] 29
+[1] "save region:"
+[1] 134
+[1] 35
+[1] "save region:"
+[1] 135
+[1] 23
+[1] "save region:"
+[1] 136
+[1] 668
+[1] "save region:"
+[1] 137
+[1] 510
+[1] "save region:"
+[1] 138
+[1] 88
+[1] "save region:"
+[1] 139
+[1] 218
+[1] "save region:"
+[1] 140
+[1] 25
+[1] "save region:"
+[1] 141
+[1] 101
+[1] "save region:"
+[1] 142
+[1] 12
+[1] "save region:"
+[1] 143
+[1] 20
+[1] "save region:"
+[1] 144
+[1] 15
+[1] "save region:"
+[1] 145
+[1] 4
+[1] "save region:"
+[1] 146
+[1] 14
+[1] "save region:"
+[1] 147
+[1] 28
+[1] "save region:"
+[1] 148
+[1] 4
+[1] "save region:"
+[1] 149
+[1] 10
+[1] "save region:"
+[1] 150
+[1] 33
+[1] "save region:"
+[1] 151
+[1] 9
+[1] "save region:"
+[1] 152
+[1] 5
+[1] "save region:"
+[1] 153
+[1] 207
+[1] "save region:"
+[1] 154
+[1] 68
+[1] "save region:"
+[1] 155
+[1] 18
+[1] "save region:"
+[1] 156
+[1] 75
+[1] "save region:"
+[1] 157
+[1] 64
+[1] "save region:"
+[1] 158
+[1] 258
+[1] "save region:"
+[1] 159
+[1] 11
+[1] "save region:"
+[1] 160
+[1] 323
+[1] "save region:"
+[1] 161
+[1] 501
+[1] "save region:"
+[1] 162
+[1] 953
+[1] "save region:"
+[1] 163
+[1] 196
+[1] "save region:"
+[1] 164
+[1] 775
+[1] "save region:"
+[1] 165
+[1] 360
+[1] "save region:"
+[1] 166
+[1] 260
+[1] "save region:"
+[1] 167
+[1] 198
+[1] "save region:"
+[1] 168
+[1] 372
+[1] "save region:"
+[1] 169
+[1] 1444
+[1] "save region:"
+[1] 170
+[1] 1177
+[1] "save region:"
+[1] 171
+[1] 655
+[1] "save region:"
+[1] 172
+[1] 2186
+[1] "save region:"
+[1] 173
+[1] 439
+[1] "save region:"
+[1] 174
+[1] 45
+[1] "save region:"
+[1] 175
+[1] 99
+[1] "save region:"
+[1] 176
+[1] 691
+[1] "save region:"
+[1] 177
+[1] 27
+[1] "save region:"
+[1] 178
+[1] 162
+[1] "save region:"
+[1] 179
+[1] 34
+[1] "save region:"
+[1] 180
+[1] 268
+[1] "save region:"
+[1] 181
+[1] 371
+[1] "save region:"
+[1] 182
+[1] 12
+[1] "save region:"
+[1] 183
+[1] 57
+[1] "save region:"
+[1] 184
+[1] 42
+[1] "save region:"
+[1] 185
+[1] 306
+[1] "save region:"
+[1] 186
+[1] 49
+[1] "save region:"
+[1] 187
+[1] 152
+[1] "save region:"
+[1] 188
+[1] 20
+[1] "save region:"
+[1] 189
+[1] 113
+[1] "save region:"
+[1] 190
+[1] 7
+[1] "save region:"
+[1] 191
+[1] 23
+[1] "save region:"
+[1] 192
+[1] 225
+[1] "save region:"
+[1] 193
+[1] 9
+[1] "save region:"
+[1] 194
+[1] 75
+[1] "save region:"
+[1] 195
+[1] 5
+[1] "save region:"
+[1] 196
+[1] 6
+[1] "save region:"
+[1] 197
+[1] 9
+[1] "save region:"
+[1] 198
+[1] 419
+[1] "save region:"
+[1] 199
+[1] 4
+[1] "Export gff function"
+[1] "read repeats"
+[1] "wrtiting repeats"
+[1] "finished saving"
+[1] "edit distance"
+[1] "Available classes: "
+[1] "no classes assigned to the repeats to calculate edit distance, stopping edit distance calculation"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3007342 160.7    9030224 482.3  9030224 482.3
+Vcells 40221629 306.9   68652320 523.8 59779778 456.1
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+[1] "Available classes: NA"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3014538 161.0    9030224 482.3  9030224 482.3
+Vcells 40240549 307.1   68652320 523.8 67850247 517.7
+[1] "plotting"
+[1] "circos"
+[1] "identify chromosomes"
+[1] "Identify main peaks"
+[1] "Merge peaks"
+[1] "export data"
+[1] "Circos Plotting"
+[1] "set sectors"
+[1] "generate circos plot"
+[1] "1"
+[1] "2"
+[1] "3"
+[1] "4"
+[1] "5"
+[1] "genomic track"
+[1] "leftover repeats"
+[1] "plot leftovers"
+[1] "Col-CEN_v1.2.fasta plots done"
+[1] "finished plotting"
+[1] "TRASH finished, exiting"
+           used  (Mb) gc trigger  (Mb) max used  (Mb)
+Ncells  3061446 163.5    9030224 482.3  9030224 482.3
+Vcells 40350189 307.9   68652320 523.8 68652095 523.8
+	Command being timed: "singularity exec ./bwtbench.sif TRASH_run.sh /data/gpfs/assoc/pgl/filip/bwtandem/Col-CEN_v1.2/Col-CEN_v1.2.fasta --o /data/gpfs/assoc/pgl/filip/bwtandem/benchmarking_results/trash/results/Col-CEN_v1.2_trash_denovo --par 2"
+	User time (seconds): 34702.36
+	System time (seconds): 99.52
+	Percent of CPU this job got: 166%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 5:47:30
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1357252
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 50458006
+	Voluntary context switches: 233884
+	Involuntary context switches: 71844
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

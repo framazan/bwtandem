@@ -1,0 +1,27 @@
+Processing /data/gpfs/assoc/pgl/filip/bwtandem/Zm/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna...
+Total repeats found: 28007
+Total time: 13762.69s
+Results written to benchmarking_results/bwtandem/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_bwtandem_exp3B_satellite.bed
+	Command being timed: "singularity exec ./bwtbench.sif python3 -m src.main /data/gpfs/assoc/pgl/filip/bwtandem/Zm/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna --tiers tier2,tier3 --min-period 100 --max-period 500 --min-array-bp 500 --tier3-mode fast --format bed -o benchmarking_results/bwtandem/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_bwtandem_exp3B_satellite -t 1"
+	User time (seconds): 13449.87
+	System time (seconds): 346.33
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:49:32
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 49292072
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 203066700
+	Voluntary context switches: 7353
+	Involuntary context switches: 9946
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

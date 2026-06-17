@@ -1,0 +1,36 @@
+----------------------------
+Maximum repeat period: 200
+Number of model states: 1382
+Total sequence window size: 100400
+DP matrix cells: 138752800
+Threads: 2
+Sequence window queue length: 18446744073709551615
+Total size: 1.03 GB (1109922000 bytes)
+----------------------------
+*Actual memory usage will be slightly greater due to output repeat queue and repeat split matrices
+============================
+----------------------------
+Annotation Coverage: 0.0801 (174577701 / 2178604320)
+	Command being timed: "singularity exec ./bwtbench.sif /opt/ULTRA/ultra --read_all -p 200 -t 2 -i 3 -d 3 --bed -o benchmarking_results/ultra/results/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic_ultra_exp3C_centc /data/gpfs/assoc/pgl/filip/bwtandem/Zm/GCA_022117705.1_Zm-Mo17-REFERENCE-CAU-T2T-assembly_genomic.fna"
+	User time (seconds): 92533.17
+	System time (seconds): 8.69
+	Percent of CPU this job got: 199%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 12:51:24
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 3544928
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3033589
+	Voluntary context switches: 3258
+	Involuntary context switches: 140753
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
