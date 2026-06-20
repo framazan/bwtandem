@@ -19,3 +19,4 @@ slurm-*.out
 *.settings
 benchmarking/TideHunter-v1.5.6_arm64-macos/
 .vscode
+*.bed

@@ -1,0 +1,3 @@
+| Tool | Total Regions | Adotto Recall (%) | Adotto Precision (%) | BP Recall (%) | BP Precision (%) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| bwtandem_sensitive | 1055805 | 47.31 | 0.08 | 47.86 | 0.07 |

@@ -37,7 +37,9 @@ def apply_mask(seq: str, mask_mode: str) -> str:
 
 def _process_chromosome(chrom: str, seq: str, min_period: int, max_period: int,
                         enabled_tiers: set, show_progress: bool,
-                        min_array_bp, max_array_bp, tier3_mode: str) -> List[TandemRepeat]:
+                        min_array_bp, max_array_bp, tier3_mode: str,
+                        mismatch_rate: float = None, anchor_match_pct: float = None,
+                        stride: int = None, min_lcp_threshold: int = None) -> List[TandemRepeat]:
     """Process a single chromosome — designed to be called in parallel."""
     finder = TandemRepeatFinder(
         seq,
@@ -49,6 +51,10 @@ def _process_chromosome(chrom: str, seq: str, min_period: int, max_period: int,
         min_array_bp=min_array_bp,
         max_array_bp=max_array_bp,
         tier3_mode=tier3_mode,
+        mismatch_rate=mismatch_rate,
+        anchor_match_pct=anchor_match_pct,
+        stride=stride,
+        min_lcp_threshold=min_lcp_threshold,
     )
     repeats = finder.find_all()
     finder.cleanup()
@@ -104,6 +110,10 @@ def main():
     parser.add_argument("--mask", choices=["none", "soft", "hard", "both"], default="none",
                         help="Masking mode: none=ignore masks, soft=skip lowercase regions, "
                              "hard=skip N regions, both=skip both (default: none)")  # Masking mode option
+    parser.add_argument("--mismatch-rate", type=float, default=None, help="Override allowed mismatch rate (e.g. 0.25)")
+    parser.add_argument("--anchor-match-pct", type=float, default=None, help="Override anchor match percentage (e.g. 0.50)")
+    parser.add_argument("--stride", type=int, default=None, help="Override k-mer sampling stride")
+    parser.add_argument("--min-lcp-threshold", type=int, default=None, help="Override minimum LCP threshold for Tier 2")
 
     args = parser.parse_args()  # Parse command-line arguments
 
@@ -153,7 +163,8 @@ def main():
             repeats = _process_chromosome(
                 chrom, seq, args.min_period, args.max_period,
                 enabled_tiers, args.verbose,
-                args.min_array_bp, args.max_array_bp, args.tier3_mode
+                args.min_array_bp, args.max_array_bp, args.tier3_mode,
+                args.mismatch_rate, args.anchor_match_pct, args.stride, args.min_lcp_threshold
             )
             all_repeats.extend(repeats)
     else:
@@ -167,7 +178,8 @@ def main():
                     _process_chromosome,
                     chrom, seq, args.min_period, args.max_period,
                     enabled_tiers, args.verbose,
-                    args.min_array_bp, args.max_array_bp, args.tier3_mode
+                    args.min_array_bp, args.max_array_bp, args.tier3_mode,
+                    args.mismatch_rate, args.anchor_match_pct, args.stride, args.min_lcp_threshold
                 )
                 futures[future] = chrom
 

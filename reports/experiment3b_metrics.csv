@@ -1,0 +1,8 @@
+Tool,knob180 arrays (of 25),TR-1 arrays (of 17),knob180 Norm Frag Score,knob180 Mean Offset Error (bp),TR-1 Mean Offset Error (bp),Runtime (s),Memory (GB)
+trf,25,17,0.0,651.96,884.85,19851.0,1.2
+ultra,0,0,0.0,0.0,0.0,125036.0,9.68
+bwtandem,25,16,0.0,985.06,1979.94,13772.0,47.01
+tantan,24,17,0.0,7065.4,5616.24,1968.4,0.5
+ncrf,0,0,0.0,0.0,0.0,2.25,0.29
+trash_denovo,25,17,0.05,9845.2,10561.32,366282.0,120.64
+trash_template,25,17,0.05,9850.62,8388.32,366282.0,120.64

@@ -19,7 +19,11 @@ class TandemRepeatFinder:
                  enabled_tiers: Optional[Set[str]] = None,
                  min_array_bp: Optional[int] = None,
                  max_array_bp: Optional[int] = None,
-                 tier3_mode: str = "balanced"):
+                 tier3_mode: str = "balanced",
+                 mismatch_rate: Optional[float] = None,
+                 anchor_match_pct: Optional[float] = None,
+                 stride: Optional[int] = None,
+                 min_lcp_threshold: Optional[int] = None):
         self.sequence = sequence  # DNA sequence string to analyze
         self.chromosome = chromosome  # Chromosome name (used in output records)
         self.min_period = min_period  # Minimum motif length (bp) to search for
@@ -34,6 +38,11 @@ class TandemRepeatFinder:
             # Swap to keep bounds consistent
             # If lower bound exceeds upper bound, swap them for consistency
             self.min_array_bp, self.max_array_bp = self.max_array_bp, self.min_array_bp
+
+        self.mismatch_rate = mismatch_rate if mismatch_rate is not None else 0.2
+        self.anchor_match_pct = anchor_match_pct
+        self.stride = stride
+        self.min_lcp_threshold = min_lcp_threshold
 
         # Initialize BWT Core
         if show_progress:
@@ -60,7 +69,7 @@ class TandemRepeatFinder:
                 self.bwt,                   # FM-index object
                 max_motif_length=tier1_max, # Maximum motif length
                 min_motif_length=tier1_min, # Minimum motif length
-                allowed_mismatch_rate=0.2,  # Allowed mismatch rate 20%
+                allowed_mismatch_rate=self.mismatch_rate,  # Allowed mismatch rate
                 allowed_indel_rate=0.1,     # Allowed indel rate 10%
                 show_progress=show_progress # Pass progress display flag
             )
@@ -72,13 +81,19 @@ class TandemRepeatFinder:
                 self.bwt,                   # FM-index object
                 min_period=min_period,      # Minimum motif length
                 max_period=max_period,      # Maximum motif length
-                allowed_mismatch_rate=0.2,  # Allowed mismatch rate 20%
+                allowed_mismatch_rate=self.mismatch_rate,  # Allowed mismatch rate
                 allowed_indel_rate=0.1,     # Allowed indel rate 10%
-                show_progress=show_progress # Pass progress display flag
+                show_progress=show_progress,# Pass progress display flag
+                min_lcp_threshold=self.min_lcp_threshold
             )
 
         # Only create Tier 3 instance if enabled, otherwise None
-        self.tier3 = Tier3LongReadFinder(self.bwt, mode=tier3_mode) if "tier3" in self.enabled_tiers else None
+        self.tier3 = Tier3LongReadFinder(
+            self.bwt, mode=tier3_mode,
+            mismatch_rate=mismatch_rate,
+            anchor_match_pct=anchor_match_pct,
+            stride=stride
+        ) if "tier3" in self.enabled_tiers else None
 
     def find_all(self) -> List[TandemRepeat]:
         """Execute the full 3-tier finding pipeline."""

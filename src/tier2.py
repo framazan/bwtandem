@@ -57,7 +57,7 @@ class Tier2LCPFinder:
     def __init__(self, bwt_core: BWTCore, min_period: int = 1, max_period: int = 1000,
                  max_short_motif: int = 9, allow_mismatches: bool = True,
                  allowed_mismatch_rate: float = 0.2, allowed_indel_rate: float = 0.1,
-                 show_progress: bool = False):
+                 show_progress: bool = False, min_lcp_threshold: Optional[int] = None):
         self.bwt = bwt_core
         # Tier 2 is designed for non-microsatellite motifs; enforce >=10bp
         self.min_period = max(10, min_period)
@@ -71,6 +71,7 @@ class Tier2LCPFinder:
         self.period_step = 1  # Step size for period scanning (increase to speed up)
         self.allowed_mismatch_rate = max(0.0, allowed_mismatch_rate)
         self.allowed_indel_rate = max(0.0, allowed_indel_rate)
+        self.min_lcp_threshold = min_lcp_threshold
         self.sequence_str = self.bwt.text_arr.tobytes().decode('ascii', errors='replace')
         self._lcp_cache = None  # Lazily computed LCP array
         self._bwt_call_count = 0  # Track BWT usage for diagnostics
@@ -144,8 +145,9 @@ class Tier2LCPFinder:
         lcp = self._get_lcp_array()
         sa = self.bwt.suffix_array.astype(np.int32, copy=False)
 
+        lcp_thresh = self.min_lcp_threshold if self.min_lcp_threshold is not None else 10
         candidates = lcp_tandem_candidates(
-            sa, lcp, n, min_unit_len, max_unit_len, min_lcp_threshold=10
+            sa, lcp, n, min_unit_len, max_unit_len, min_lcp_threshold=lcp_thresh
         )
 
         # Group candidates by period
@@ -331,7 +333,7 @@ class Tier2LCPFinder:
         sa = self.bwt.suffix_array.astype(np.int32, copy=False)
 
         # Dynamic LCP threshold: shorter periods use lower threshold
-        lcp_thresh = max(8, min_p // 2)
+        lcp_thresh = self.min_lcp_threshold if self.min_lcp_threshold is not None else max(8, min_p // 2)
         candidates = lcp_tandem_candidates(
             sa, lcp, n, min_p, max_p, min_lcp_threshold=lcp_thresh
         )

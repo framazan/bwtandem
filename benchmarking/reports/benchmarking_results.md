@@ -64,6 +64,5 @@ Here are the compiled benchmarking results across all three experiments, updated
 | ultra          |                      0 |                    0    |                           0    |      46284    |          3.38 |
 | bwtandem       |                     17 |                    0.01 |                        4837.53 |      15358    |         45.53 |
 | tantan         |                     17 |                    0    |                        9243.5  |       2110.63 |          0.5  |
-| ncrf           |                      0 |                    0    |                           0    |          1.83 |          0.29 |
 | trash_denovo   |                     17 |                    0.05 |                        5318.71 |     351900    |         42.83 |
 | trash_template |                     17 |                    0.05 |                        5318.71 |     351900    |         42.83 |

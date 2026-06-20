@@ -15,6 +15,9 @@ def compute_adaptive_params(
     min_period: int,     # Minimum repeat unit length
     max_period: int,     # Maximum repeat unit length
     preset: str = "balanced",  # Speed/sensitivity preset ("fast", "balanced", "sensitive")
+    override_mismatch_rate: Optional[float] = None,
+    override_anchor_match_pct: Optional[float] = None,
+    override_stride: Optional[int] = None,
 ) -> dict:
     """Compute adaptive Tier 3 parameters based on input characteristics."""
     # Speed weight per preset: fast=faster (lower sensitivity), sensitive=slower (higher sensitivity)
@@ -58,11 +61,25 @@ def compute_adaptive_params(
 
     # Clamp all parameters to allowed ranges
     kmer_size = max(12, min(28, kmer_size))  # k-mer size: restricted to 12-28 bp
-    stride = max(20, min(300, stride))  # Sampling stride: restricted to 20-300
-    allowed_mismatch_rate = max(0.15, min(0.20, allowed_mismatch_rate))  # Mismatch rate: 15%-20%
+    
+    if override_stride is not None:
+        stride = override_stride
+    else:
+        stride = max(20, min(300, stride))  # Sampling stride: restricted to 20-300
+        
+    if override_mismatch_rate is not None:
+        allowed_mismatch_rate = override_mismatch_rate
+    else:
+        allowed_mismatch_rate = max(0.15, min(0.20, allowed_mismatch_rate))  # Mismatch rate: 15%-20%
+        
     tolerance_ratio = max(0.02, min(0.04, tolerance_ratio))  # Period tolerance: 2%-4%
     max_occurrences = max(200, min(1500, max_occurrences))  # Max occurrences: 200-1500
-    anchor_match_pct = max(0.70, min(0.80, anchor_match_pct))  # Anchor match ratio: 70%-80%
+    
+    if override_anchor_match_pct is not None:
+        anchor_match_pct = override_anchor_match_pct
+    else:
+        anchor_match_pct = max(0.70, min(0.80, anchor_match_pct))  # Anchor match ratio: 70%-80%
+        
     scan_backward = max(20, min(80, scan_backward))  # Backward scan: 20-80 units
     scan_forward = max(200, min(800, scan_forward))  # Forward scan: 200-800 units
 
@@ -90,12 +107,18 @@ class Tier3LongReadFinder:
 
     def __init__(self, bwt_core: BWTCore, min_length: int = 100,
                  max_length: int = 100000, min_copies: float = 2.0,
-                 mode: str = "balanced"):
+                 mode: str = "balanced",
+                 mismatch_rate: Optional[float] = None,
+                 anchor_match_pct: Optional[float] = None,
+                 stride: Optional[int] = None):
         self.bwt = bwt_core          # Store FM-index object (used for subsequent searches)
         self.min_length = min_length  # Minimum repeat unit length to detect (bp)
         self.max_length = max_length  # Maximum repeat unit length to detect (bp)
         self.min_copies = min_copies  # Minimum number of copies required to qualify as a repeat
         self.mode = mode             # Speed/sensitivity preset string
+        self.override_mismatch_rate = mismatch_rate
+        self.override_anchor_match_pct = anchor_match_pct
+        self.override_stride = stride
 
     def find_long_repeats(self, chromosome: str, tier1_seen: Set[Tuple[int, int]],
                           tier2_seen: Set[Tuple[int, int]]) -> List[TandemRepeat]:
@@ -135,6 +158,9 @@ class Tier3LongReadFinder:
             min_period=self.min_length,
             max_period=self.max_length,
             preset=self.mode,
+            override_mismatch_rate=self.override_mismatch_rate,
+            override_anchor_match_pct=self.override_anchor_match_pct,
+            override_stride=self.override_stride,
         )  # Parameter dictionary reflecting sequence length, GC content, coverage, etc.
 
         anchor_match_pct = params["anchor_match_pct"]  # Extract anchor-based boundary verification match threshold

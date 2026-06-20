@@ -162,6 +162,27 @@ def compute_norm_fragmentation(bed_file, array_bed):
     frag = compute_fragmentation(bed_file, array_bed)
     return round(1.0 / frag, 2) if frag > 0 else 0
 
+def compute_tag_metrics(bed_file):
+    tag_count = 0
+    longest_tag = 0
+    try:
+        with open(bed_file, 'r') as f:
+            for line in f:
+                if not line.strip(): continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 4:
+                    start = int(parts[1])
+                    end = int(parts[2])
+                    motif_or_seq = parts[3].upper()
+                    if 'TAG' in motif_or_seq or 'CTA' in motif_or_seq:
+                        tag_count += 1
+                        length = end - start
+                        if length > longest_tag:
+                            longest_tag = length
+    except Exception:
+        pass
+    return tag_count, longest_tag / 1000.0
+
 def get_bed_files(tools, genome, exp_code, base_dir='beds', must_include=None):
     files = {}
     for tool_alias in tools:
@@ -185,9 +206,15 @@ def get_bed_files(tools, genome, exp_code, base_dir='beds', must_include=None):
             
         # Additional logic for trash aliases
         if tool_alias == 'trash_denovo':
-            matches = [m for m in matches if 'template' not in m and 'CEN' not in m and 'CentC' not in m and 'TAG' not in m and 'TR1' not in m and 'knob180' not in m]
+            # Remove anything that is explicitly a template run
+            matches = [m for m in matches if 'template' not in m.lower() and 'CEN1' not in m and 'CentC' not in m and 'TAG' not in m and 'TR1' not in m and 'knob180' not in m]
+            # Prioritize files explicitly named 'denovo'
+            matches.sort(key=lambda x: 0 if 'denovo' in x.lower() else 1)
         elif tool_alias == 'trash_template':
-            matches = [m for m in matches if 'template' in m or 'CEN' in m or 'CentC' in m or 'TAG' in m or 'TR1' in m or 'knob180' in m]
+            # Remove anything that is explicitly a denovo run
+            matches = [m for m in matches if 'denovo' not in m.lower()]
+            # Prioritize files explicitly named 'template' or the base '_trash.bed'
+            matches.sort(key=lambda x: 0 if ('template' in x.lower() or x.endswith('_trash.bed')) else 1)
 
         if matches:
             files[tool_alias] = matches[0] # Just take the first valid match
@@ -220,7 +247,12 @@ def main():
     os.makedirs('reports', exist_ok=True)
     
     try:
-        df_rm = pd.read_csv('reports/runtime_memory.csv')
+        if os.path.exists('benchmarking/reports/runtime_memory.csv'):
+            df_rm = pd.read_csv('benchmarking/reports/runtime_memory.csv')
+        elif os.path.exists('reports/runtime_memory.csv'):
+            df_rm = pd.read_csv('reports/runtime_memory.csv')
+        else:
+            df_rm = None
     except Exception:
         df_rm = None
 
@@ -291,8 +323,17 @@ def main():
     data_exp3a = []
     for tool, bed in get_bed_files(tools, "Mo17", "exp3A").items():
         regions, bp = total_regions_and_bp(bed)
+        tag_count, longest_tag = compute_tag_metrics(bed)
         runtime, memory = get_runtime_memory(df_rm, tool, "Mo17", "Exp3A")
-        data_exp3a.append({'Tool': tool, 'Total SSR bp': bp, 'Regions': regions, 'Runtime (s)': runtime, 'Memory (GB)': memory})
+        data_exp3a.append({
+            'Tool': tool, 
+            'Total SSR bp': bp, 
+            'Regions': regions, 
+            'TAG arrays found': tag_count,
+            'longest TAG (kb)': round(longest_tag, 2),
+            'Runtime (s)': runtime, 
+            'Memory (GB)': memory
+        })
     df_exp3a = pd.DataFrame(data_exp3a)
     df_exp3a.to_csv('reports/experiment3a_metrics.csv', index=False)
     if not df_exp3a.empty:
@@ -308,6 +349,7 @@ def main():
         t_count = compute_array_detection(bed, tr1_bed) if os.path.exists(tr1_bed) else 0
         k_frag = compute_norm_fragmentation(bed, knob180_bed) if os.path.exists(knob180_bed) else 0
         k_off = compute_boundary_offset(bed, knob180_bed) if os.path.exists(knob180_bed) else 0
+        t_off = compute_boundary_offset(bed, tr1_bed) if os.path.exists(tr1_bed) else 0
         runtime, memory = get_runtime_memory(df_rm, tool, "Mo17", "Exp3B")
         data_exp3b.append({
             'Tool': tool, 
@@ -315,6 +357,7 @@ def main():
             'TR-1 arrays (of 17)': t_count,
             'knob180 Norm Frag Score': k_frag,
             'knob180 Mean Offset Error (bp)': round(k_off, 2),
+            'TR-1 Mean Offset Error (bp)': round(t_off, 2),
             'Runtime (s)': runtime,
             'Memory (GB)': memory
         })
@@ -327,14 +370,22 @@ def main():
     # 3C CentC
     data_exp3c = []
     centc_bed = "ground_truth/mo17_centc_arrays.bed"
+    gt_c_regions, gt_c_bp = total_regions_and_bp(centc_bed) if os.path.exists(centc_bed) else (0, 0)
     for tool, bed in get_bed_files(tools, "Mo17", "exp3C").items():
         c_count = compute_array_detection(bed, centc_bed) if os.path.exists(centc_bed) else 0
         c_frag = compute_norm_fragmentation(bed, centc_bed) if os.path.exists(centc_bed) else 0
         c_off = compute_boundary_offset(bed, centc_bed) if os.path.exists(centc_bed) else 0
+        
+        # New metrics
+        cen_cov = compute_centromere_coverage(bed, centc_bed) if os.path.exists(centc_bed) else 0
+        _, tool_bp = total_regions_and_bp(bed)
+        
         runtime, memory = get_runtime_memory(df_rm, tool, "Mo17", "Exp3C")
         data_exp3c.append({
             'Tool': tool, 
             'CentC arrays (of 17)': c_count,
+            'Total CentC bp (out of)': f"{tool_bp} / {gt_c_bp}",
+            'centromere coverage (%)': round(cen_cov, 2),
             'CentC Norm Frag Score': c_frag,
             'CentC Mean Offset Error (bp)': round(c_off, 2),
             'Runtime (s)': runtime,
